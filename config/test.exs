@@ -15,3 +15,7 @@ config :phoenix_kit_warehouse, PhoenixKitWarehouse.Test.Repo,
 config :phoenix_kit, repo: PhoenixKitWarehouse.Test.Repo
 
 config :logger, level: :warning
+
+config :phoenix_kit_warehouse, PhoenixKitWarehouse.Test.Endpoint,
+  secret_key_base: String.duplicate("a", 64),
+  server: false
