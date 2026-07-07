@@ -70,6 +70,13 @@ defmodule PhoenixKitWarehouse.MixProject do
       pk_dep(:phoenix_kit, "~> 1.7 and >= 1.7.165"),
       pk_dep(:phoenix_kit_catalogue, "~> 0.10.0"),
       pk_dep(:phoenix_kit_locations, "~> 0.2.0"),
+      # Plain library deps, not `required_modules` entries — CurrencyDisplay
+      # and `use PhoenixKitComments.Embed` are compile-time dependencies of
+      # this package's own LiveViews regardless of whether the host has the
+      # Billing/Comments *modules* enabled at runtime (see Task 4's design
+      # note). Both features self-gate behind their own `available?/0`.
+      pk_dep(:phoenix_kit_billing, "~> 0.5"),
+      pk_dep(:phoenix_kit_comments, "~> 0.2"),
       {:ex_doc, "~> 0.39", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
