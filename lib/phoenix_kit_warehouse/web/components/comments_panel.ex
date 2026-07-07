@@ -31,15 +31,16 @@ defmodule PhoenixKitWarehouse.Web.Components.CommentsPanel do
     * `:title` — optional heading; defaults to `""`
     * `:read_only` — when true, render without composer or chrome
   """
-  attr :kind, :atom,
+  attr(:kind, :atom,
     required: true,
     values: [:goods_issue, :goods_receipt, :internal_order, :supplier_order, :inventory]
+  )
 
-  attr :resource_uuid, :string, required: true
-  attr :current_user, :any, required: true
-  attr :id, :string, default: nil
-  attr :title, :string, default: ""
-  attr :read_only, :boolean, default: false
+  attr(:resource_uuid, :string, required: true)
+  attr(:current_user, :any, required: true)
+  attr(:id, :string, default: nil)
+  attr(:title, :string, default: "")
+  attr(:read_only, :boolean, default: false)
 
   def panel(assigns) do
     assigns =

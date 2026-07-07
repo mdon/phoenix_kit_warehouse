@@ -40,13 +40,13 @@ defmodule PhoenixKitWarehouse.Web.Components.WarehouseBrowser do
   Toggle events (`toggle_catalogue` / `toggle_category`) are sent to the
   parent LiveView which updates `expanded_*` and `loaded_*` assigns.
   """
-  attr :catalogue_summaries, :list, required: true
-  attr :expanded_catalogues, :any, required: true
-  attr :expanded_categories, :any, required: true
-  attr :loaded_categories, :map, required: true
-  attr :loaded_items, :map, required: true
-  attr :locale, :string, required: true
-  attr :stock_map, :map, required: true
+  attr(:catalogue_summaries, :list, required: true)
+  attr(:expanded_catalogues, :any, required: true)
+  attr(:expanded_categories, :any, required: true)
+  attr(:loaded_categories, :map, required: true)
+  attr(:loaded_items, :map, required: true)
+  attr(:locale, :string, required: true)
+  attr(:stock_map, :map, required: true)
 
   def stock_tree(assigns) do
     ~H"""
@@ -182,17 +182,17 @@ defmodule PhoenixKitWarehouse.Web.Components.WarehouseBrowser do
   The add button fires a `phx-click` with the event named by `add_event`
   (default `"add_position"`) and `phx-value-item_uuid`.
   """
-  attr :catalogue_summaries, :list, required: true
-  attr :expanded_catalogues, :any, required: true
-  attr :expanded_categories, :any, required: true
-  attr :loaded_categories, :map, required: true
-  attr :loaded_items, :map, required: true
-  attr :locale, :string, required: true
-  attr :present_item_uuids, :any, default: MapSet.new()
-  attr :item_search_query, :string, default: ""
-  attr :item_search_results, :any, default: nil
-  attr :add_event, :string, default: "add_position"
-  attr :search_mode, :atom, default: :list
+  attr(:catalogue_summaries, :list, required: true)
+  attr(:expanded_catalogues, :any, required: true)
+  attr(:expanded_categories, :any, required: true)
+  attr(:loaded_categories, :map, required: true)
+  attr(:loaded_items, :map, required: true)
+  attr(:locale, :string, required: true)
+  attr(:present_item_uuids, :any, default: MapSet.new())
+  attr(:item_search_query, :string, default: "")
+  attr(:item_search_results, :any, default: nil)
+  attr(:add_event, :string, default: "add_position")
+  attr(:search_mode, :atom, default: :list)
 
   def add_picker(assigns) do
     ~H"""
@@ -433,12 +433,12 @@ defmodule PhoenixKitWarehouse.Web.Components.WarehouseBrowser do
 
   Price/sum columns are hidden entirely when `track_value` is false.
   """
-  attr :lines, :list, required: true
-  attr :track_value, :boolean, required: true
-  attr :names, :map, required: true
-  attr :stock_map, :map, required: true
-  attr :locale, :string, required: true
-  attr :editable, :boolean, default: true
+  attr(:lines, :list, required: true)
+  attr(:track_value, :boolean, required: true)
+  attr(:names, :map, required: true)
+  attr(:stock_map, :map, required: true)
+  attr(:locale, :string, required: true)
+  attr(:editable, :boolean, default: true)
 
   def count_sheet(assigns) do
     ~H"""
@@ -655,8 +655,8 @@ defmodule PhoenixKitWarehouse.Web.Components.WarehouseBrowser do
 
   Columns: Item (name + SKU) / Unit / In stock (qty) / Total value.
   """
-  attr :stock_items, :list, required: true
-  attr :locale, :string, required: true
+  attr(:stock_items, :list, required: true)
+  attr(:locale, :string, required: true)
 
   def stock_sheet(assigns) do
     ~H"""
@@ -819,13 +819,13 @@ defmodule PhoenixKitWarehouse.Web.Components.WarehouseBrowser do
 
   The `on_close` event is also a parent-side event (cancel / backdrop close).
   """
-  attr :id, :string, required: true
-  attr :show, :boolean, required: true
-  attr :title, :string, required: true
-  attr :on_close, :string, required: true
-  attr :candidates, :list, default: []
-  attr :selected_uuids, :any, default: []
-  attr :search_query, :string, default: ""
+  attr(:id, :string, required: true)
+  attr(:show, :boolean, required: true)
+  attr(:title, :string, required: true)
+  attr(:on_close, :string, required: true)
+  attr(:candidates, :list, default: [])
+  attr(:selected_uuids, :any, default: [])
+  attr(:search_query, :string, default: "")
 
   def source_picker(assigns) do
     assigns =

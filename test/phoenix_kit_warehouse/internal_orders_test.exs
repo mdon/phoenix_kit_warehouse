@@ -82,7 +82,11 @@ defmodule PhoenixKitWarehouse.InternalOrdersTest do
     ]
 
     order =
-      FakeOrderSources.put_sub_order(%{uuid: Ecto.UUID.generate(), label: "fake sub-order", lines: lines})
+      FakeOrderSources.put_sub_order(%{
+        uuid: Ecto.UUID.generate(),
+        label: "fake sub-order",
+        lines: lines
+      })
 
     sheet = %{lines: lines}
 
@@ -472,7 +476,10 @@ defmodule PhoenixKitWarehouse.InternalOrdersTest do
       committed = ref["lines"][item_uuid]
 
       assert is_nil(committed) or
-               Decimal.equal?(PhoenixKitWarehouse.StockLedger.to_decimal(committed), Decimal.new("0"))
+               Decimal.equal?(
+                 PhoenixKitWarehouse.StockLedger.to_decimal(committed),
+                 Decimal.new("0")
+               )
     end
 
     test "re-importing the same source into the same internal order updates the ref's lines in place" do

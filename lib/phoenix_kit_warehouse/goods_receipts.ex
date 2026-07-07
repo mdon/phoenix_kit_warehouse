@@ -476,9 +476,10 @@ defmodule PhoenixKitWarehouse.GoodsReceipts do
   defp lock_status_step(uuid, expected_status, error) do
     Ecto.Multi.run(Ecto.Multi.new(), :lock_status, fn repo, _changes ->
       query =
-        from r in GoodsReceipt,
+        from(r in GoodsReceipt,
           where: r.uuid == ^uuid and r.status == ^expected_status,
           lock: "FOR UPDATE"
+        )
 
       case repo.one(query) do
         nil -> {:error, error}

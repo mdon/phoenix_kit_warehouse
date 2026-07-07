@@ -348,9 +348,10 @@ defmodule PhoenixKitWarehouse.InternalOrders do
   defp lock_status_step(uuid, expected_status, error) do
     Ecto.Multi.run(Ecto.Multi.new(), :lock_status, fn repo, _changes ->
       query =
-        from o in InternalOrder,
+        from(o in InternalOrder,
           where: o.uuid == ^uuid and o.status == ^expected_status,
           lock: "FOR UPDATE"
+        )
 
       case repo.one(query) do
         nil -> {:error, error}

@@ -25,12 +25,19 @@ defmodule PhoenixKitWarehouse.Web.StockLive do
   alias PhoenixKitWarehouse.ViewConfigs
   alias PhoenixKitWarehouse.StockLedger
   alias PhoenixKitWarehouse.ColumnConfig.Stock, as: StockColumnConfig
-  alias PhoenixKitWarehouse.Web.Components.{ColumnModal, FilterChips, WarehouseBrowser, WarehouseHeader}
+
+  alias PhoenixKitWarehouse.Web.Components.{
+    ColumnModal,
+    FilterChips,
+    WarehouseBrowser,
+    WarehouseHeader
+  }
+
   alias PhoenixKitCatalogue.Catalogue
 
   # Opt out of PhoenixKit's auto admin-chrome layout so this view self-wraps
   # with `LayoutWrapper.app_layout` in render/1. Same pattern as orders/index.ex.
-  on_mount {__MODULE__, :self_wrapped_layout}
+  on_mount({__MODULE__, :self_wrapped_layout})
 
   def on_mount(:self_wrapped_layout, _params, _session, socket) do
     {:cont, put_in(socket.private[:live_layout], {PhoenixKitWeb.Layouts, :app})}
@@ -142,7 +149,8 @@ defmodule PhoenixKitWarehouse.Web.StockLive do
     Enum.map(items, fn %{item: item, quantity: q, unit_value: uv} ->
       catalogue_name =
         (item.catalogue &&
-           WarehouseBrowser.localized_name(item.catalogue, locale) |> WarehouseBrowser.strip_prefix()) ||
+           WarehouseBrowser.localized_name(item.catalogue, locale)
+           |> WarehouseBrowser.strip_prefix()) ||
           ""
 
       %{
@@ -449,11 +457,11 @@ defmodule PhoenixKitWarehouse.Web.StockLive do
     """
   end
 
-  attr :by, :string, required: true
-  attr :label, :string, required: true
-  attr :sort_by, :string, required: true
-  attr :sort_dir, :atom, required: true
-  attr :align, :atom, default: :left
+  attr(:by, :string, required: true)
+  attr(:label, :string, required: true)
+  attr(:sort_by, :string, required: true)
+  attr(:sort_dir, :atom, required: true)
+  attr(:align, :atom, default: :left)
 
   defp sort_header(assigns) do
     assigns = assign(assigns, :active?, assigns.sort_by == assigns.by)

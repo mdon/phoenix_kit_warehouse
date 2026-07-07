@@ -19,9 +19,9 @@ defmodule PhoenixKitWarehouse.Web.Components.FilterChips do
 
   import PhoenixKitWeb.Components.Core.Icon, only: [icon: 1]
 
-  attr :meta, :map, required: true, doc: "Column metadata from ColumnConfig"
-  attr :value, :any, default: nil, doc: "Current filter value (any shape)"
-  attr :entries, :list, default: [], doc: "Visible entries — for dynamic enum options"
+  attr(:meta, :map, required: true, doc: "Column metadata from ColumnConfig")
+  attr(:value, :any, default: nil, doc: "Current filter value (any shape)")
+  attr(:entries, :list, default: [], doc: "Visible entries — for dynamic enum options")
 
   def filter_chip(assigns) do
     ~H"""
@@ -49,9 +49,9 @@ defmodule PhoenixKitWarehouse.Web.Components.FilterChips do
     """
   end
 
-  attr :meta, :map, required: true
-  attr :value, :any, default: nil
-  attr :entries, :list, default: []
+  attr(:meta, :map, required: true)
+  attr(:value, :any, default: nil)
+  attr(:entries, :list, default: [])
 
   defp input_for_type(%{meta: %{filter_type: :text}} = assigns) do
     ~H"""

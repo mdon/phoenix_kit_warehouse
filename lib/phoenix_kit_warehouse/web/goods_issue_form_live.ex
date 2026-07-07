@@ -26,7 +26,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueFormLive do
   alias PhoenixKitWarehouse.StorageFolders
   alias PhoenixKitWarehouse.InternalOrders
   alias PhoenixKitWarehouse.Web.Components.{CommentsPanel, WarehouseBrowser}
-  
+
   alias PhoenixKit.Utils.Routes
 
   # ---------------------------------------------------------------------------
@@ -932,9 +932,9 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueFormLive do
     """
   end
 
-  attr :title, :string, required: true
-  attr :refs, :list, required: true
-  attr :link_kind, :string, required: true
+  attr(:title, :string, required: true)
+  attr(:refs, :list, required: true)
+  attr(:link_kind, :string, required: true)
 
   defp ref_group(assigns) do
     ~H"""
@@ -989,9 +989,9 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueFormLive do
   # Function component: lines table
   # ---------------------------------------------------------------------------
 
-  attr :lines, :list, required: true
-  attr :posted?, :boolean, required: true
-  attr :on_hand_map, :map, required: true
+  attr(:lines, :list, required: true)
+  attr(:posted?, :boolean, required: true)
+  attr(:on_hand_map, :map, required: true)
 
   defp goods_issue_lines_table(assigns) do
     ~H"""

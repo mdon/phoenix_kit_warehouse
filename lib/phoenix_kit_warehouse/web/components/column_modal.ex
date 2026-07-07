@@ -27,13 +27,13 @@ defmodule PhoenixKitWarehouse.Web.Components.ColumnModal do
 
   alias PhoenixKitWeb.Components.Core.DraggableList
 
-  attr :id, :string, default: "warehouse-column-modal"
-  attr :show, :boolean, required: true
-  attr :column_config, :atom, required: true
-  attr :selected, :list, required: true
-  attr :active_filters, :list, default: []
-  attr :temp_selected, :list, default: nil
-  attr :temp_active_filters, :list, default: nil
+  attr(:id, :string, default: "warehouse-column-modal")
+  attr(:show, :boolean, required: true)
+  attr(:column_config, :atom, required: true)
+  attr(:selected, :list, required: true)
+  attr(:active_filters, :list, default: [])
+  attr(:temp_selected, :list, default: nil)
+  attr(:temp_active_filters, :list, default: nil)
 
   def column_modal(assigns) do
     column_meta = assigns.column_config.column_metadata_map()

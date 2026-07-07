@@ -11,7 +11,7 @@ defmodule PhoenixKitWarehouse.Web.Components.WarehouseHeader do
   use Phoenix.Component
   use Gettext, backend: PhoenixKitWarehouse.Gettext
 
-  attr :active, :atom, required: true
+  attr(:active, :atom, required: true)
 
   def warehouse_header(assigns) do
     ~H"""

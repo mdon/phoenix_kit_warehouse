@@ -44,7 +44,9 @@ defmodule PhoenixKitWarehouse.SourceKindsIntegrationTest do
       order = create_internal_order!()
       ref = %{"type" => "sub_order", "uuid" => Ecto.UUID.generate()}
 
-      assert {:ok, updated} = InternalOrders.import_from_sources(order, [ref], Ecto.UUID.generate())
+      assert {:ok, updated} =
+               InternalOrders.import_from_sources(order, [ref], Ecto.UUID.generate())
+
       assert updated.lines == []
     end
 
@@ -77,7 +79,10 @@ defmodule PhoenixKitWarehouse.SourceKindsIntegrationTest do
 
   describe "with the sub_order kind registered" do
     setup do
-      Application.put_env(:phoenix_kit_warehouse, :source_kinds, [FakeOrderSources.sub_order_kind()])
+      Application.put_env(:phoenix_kit_warehouse, :source_kinds, [
+        FakeOrderSources.sub_order_kind()
+      ])
+
       :ok
     end
 
@@ -117,14 +122,22 @@ defmodule PhoenixKitWarehouse.SourceKindsIntegrationTest do
 
     test "DocRefs.sub_order_ref/1 resolves through SourceKinds.resolve/2" do
       sub =
-        FakeOrderSources.put_sub_order(%{uuid: Ecto.UUID.generate(), label: "fake-sub-ref", lines: []})
+        FakeOrderSources.put_sub_order(%{
+          uuid: Ecto.UUID.generate(),
+          label: "fake-sub-ref",
+          lines: []
+        })
 
       assert %{label: "fake-sub-ref", kind: :sub_order} = DocRefs.sub_order_ref(sub.uuid)
     end
 
     test "DocRefs.refs_for/1 resolves a sub_order ref via the registered kind" do
       sub =
-        FakeOrderSources.put_sub_order(%{uuid: Ecto.UUID.generate(), label: "fake-sub-list", lines: []})
+        FakeOrderSources.put_sub_order(%{
+          uuid: Ecto.UUID.generate(),
+          label: "fake-sub-list",
+          lines: []
+        })
 
       assert [%{label: "fake-sub-list", kind: :sub_order}] =
                DocRefs.refs_for([%{"type" => "sub_order", "uuid" => sub.uuid}])
@@ -132,9 +145,16 @@ defmodule PhoenixKitWarehouse.SourceKindsIntegrationTest do
 
     test "GoodsIssues.add_source_ref/3 rejects an unregistered kind but accepts a registered one" do
       io = create_internal_order!()
-      {:ok, issue} = GoodsIssues.create_goods_issue(%{internal_order_uuid: io.uuid, location_uuid: @default_location})
 
-      assert {:error, :invalid_ref_type} = GoodsIssues.add_source_ref(issue, "order", Ecto.UUID.generate())
+      {:ok, issue} =
+        GoodsIssues.create_goods_issue(%{
+          internal_order_uuid: io.uuid,
+          location_uuid: @default_location
+        })
+
+      assert {:error, :invalid_ref_type} =
+               GoodsIssues.add_source_ref(issue, "order", Ecto.UUID.generate())
+
       assert {:ok, updated} = GoodsIssues.add_source_ref(issue, "sub_order", Ecto.UUID.generate())
       assert length(updated.source_refs) == 1
     end

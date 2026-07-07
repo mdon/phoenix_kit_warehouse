@@ -144,7 +144,8 @@ defmodule PhoenixKitWarehouse.ActivityLog do
     :ok
   end
 
-  defp enabled?, do: Application.get_env(:phoenix_kit_warehouse, :inventory_activity_logging, true)
+  defp enabled?,
+    do: Application.get_env(:phoenix_kit_warehouse, :inventory_activity_logging, true)
 
   defp default_mode(nil), do: "auto"
   defp default_mode(_), do: "manual"

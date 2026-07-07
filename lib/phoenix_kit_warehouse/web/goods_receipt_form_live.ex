@@ -26,7 +26,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
   alias PhoenixKitWarehouse.InternalOrders
   alias PhoenixKitWarehouse.SupplierOrders
   alias PhoenixKitWarehouse.Web.Components.{CommentsPanel, WarehouseBrowser}
-  
+
   alias PhoenixKit.Utils.Routes
   alias PhoenixKitCatalogue.Catalogue
 
@@ -157,7 +157,10 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
       |> assign(:location_name, location_name)
       |> assign(:supplier_order_ref, supplier_order_ref)
       |> assign(:refs_by_kind, refs_by_kind(receipt))
-      |> assign(:page_title, dgettext("default", "Goods Receipt #%{number}", number: receipt.number))
+      |> assign(
+        :page_title,
+        dgettext("default", "Goods Receipt #%{number}", number: receipt.number)
+      )
 
     if same_receipt?, do: socket, else: assign_edit_buffer(socket, receipt)
   end
@@ -970,9 +973,9 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
     """
   end
 
-  attr :title, :string, required: true
-  attr :refs, :list, required: true
-  attr :link_kind, :string, required: true
+  attr(:title, :string, required: true)
+  attr(:refs, :list, required: true)
+  attr(:link_kind, :string, required: true)
 
   defp ref_group(assigns) do
     ~H"""
@@ -1021,8 +1024,8 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
   # Function component: lines verification table
   # ---------------------------------------------------------------------------
 
-  attr :lines, :list, required: true
-  attr :posted?, :boolean, required: true
+  attr(:lines, :list, required: true)
+  attr(:posted?, :boolean, required: true)
 
   defp goods_receipt_lines_table(assigns) do
     ~H"""

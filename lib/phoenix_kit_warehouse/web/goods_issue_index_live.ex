@@ -17,7 +17,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueIndexLive do
   alias PhoenixKitWarehouse.ColumnConfig.GoodsIssues, as: GoodsIssueColumnConfig
   alias PhoenixKitWarehouse.Web.Components.{ColumnModal, FilterChips, WarehouseHeader}
 
-  on_mount {__MODULE__, :self_wrapped_layout}
+  on_mount({__MODULE__, :self_wrapped_layout})
 
   def on_mount(:self_wrapped_layout, _params, _session, socket) do
     {:cont, put_in(socket.private[:live_layout], {PhoenixKitWeb.Layouts, :app})}
@@ -25,8 +25,6 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueIndexLive do
 
   @impl true
   def mount(_params, _session, socket) do
-
-
     scope = socket.assigns[:phoenix_kit_current_scope]
     current_user = scope && PhoenixKit.Users.Auth.Scope.user(scope)
     user_uuid = current_user && current_user.uuid
@@ -414,11 +412,11 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueIndexLive do
     """
   end
 
-  attr :by, :string, required: true
-  attr :label, :string, required: true
-  attr :sort_by, :string, required: true
-  attr :sort_dir, :atom, required: true
-  attr :align, :atom, default: :left
+  attr(:by, :string, required: true)
+  attr(:label, :string, required: true)
+  attr(:sort_by, :string, required: true)
+  attr(:sort_dir, :atom, required: true)
+  attr(:align, :atom, default: :left)
 
   defp sort_header(assigns) do
     assigns = assign(assigns, :active?, assigns.sort_by == assigns.by)

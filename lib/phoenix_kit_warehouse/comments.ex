@@ -24,7 +24,8 @@ defmodule PhoenixKitWarehouse.Comments do
 
   @doc "The comment `resource_type` string used for the given document kind."
   @spec resource_type(kind()) :: String.t()
-  def resource_type(kind) when is_map_key(@resource_types, kind), do: Map.fetch!(@resource_types, kind)
+  def resource_type(kind) when is_map_key(@resource_types, kind),
+    do: Map.fetch!(@resource_types, kind)
 
   @doc "True when the comments module is installed and enabled."
   @spec available?() :: boolean()

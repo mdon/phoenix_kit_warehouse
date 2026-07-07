@@ -179,7 +179,9 @@ defmodule PhoenixKitWarehouse.StockLedgerTest do
   describe "upsert_quantity/3 — opts[:repo]" do
     test "accepts a custom repo via opts" do
       item = Ecto.UUID.generate()
-      {:ok, row} = Warehouse.upsert_quantity(item, "3", unit_value: nil, repo: PhoenixKitWarehouse.Test.Repo)
+
+      {:ok, row} =
+        Warehouse.upsert_quantity(item, "3", unit_value: nil, repo: PhoenixKitWarehouse.Test.Repo)
 
       assert row.item_uuid == item
     end

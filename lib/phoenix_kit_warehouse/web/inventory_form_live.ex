@@ -26,7 +26,7 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLive do
   alias PhoenixKitWarehouse.Comments
   alias PhoenixKitWarehouse.StorageFolders
   alias PhoenixKitWarehouse.Web.Components.{CommentsPanel, WarehouseBrowser}
-  
+
   alias PhoenixKit.Users.Auth
   alias PhoenixKit.Utils.Routes
   alias PhoenixKitCatalogue.Catalogue
@@ -620,7 +620,8 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLive do
        |> push_navigate(to: Routes.path("/admin/andi/warehouse"))}
     else
       {:error, :not_draft} ->
-        {:noreply, put_flash(socket, :error, dgettext("default", "Document is already conducted"))}
+        {:noreply,
+         put_flash(socket, :error, dgettext("default", "Document is already conducted"))}
 
       {:error, _reason} ->
         {:noreply, put_flash(socket, :error, dgettext("default", "Failed to conduct stocktake"))}
@@ -700,7 +701,8 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLive do
         {:noreply, put_flash(socket, :error, dgettext("default", "Document is not posted"))}
 
       {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, dgettext("default", "Failed to re-conduct stocktake"))}
+        {:noreply,
+         put_flash(socket, :error, dgettext("default", "Failed to re-conduct stocktake"))}
     end
   end
 
@@ -1293,7 +1295,8 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLive do
 
     catalogue_names =
       Map.new(catalogues, fn cat ->
-        {cat.uuid, WarehouseBrowser.localized_name(cat, locale) |> WarehouseBrowser.strip_prefix()}
+        {cat.uuid,
+         WarehouseBrowser.localized_name(cat, locale) |> WarehouseBrowser.strip_prefix()}
       end)
 
     wanted_category_uuids = MapSet.new(category_uuids)
@@ -1312,7 +1315,11 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLive do
     Map.merge(item_names, Map.merge(catalogue_names, category_names))
   end
 
-  defp ensure_saved(%PhoenixKitWarehouse.InventoryDocument{status: "draft"} = doc, attrs, _user_uuid) do
+  defp ensure_saved(
+         %PhoenixKitWarehouse.InventoryDocument{status: "draft"} = doc,
+         attrs,
+         _user_uuid
+       ) do
     Inventories.update_draft(doc, attrs)
   end
 
@@ -1375,11 +1382,11 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLive do
   # ---------------------------------------------------------------------------
 
   @doc false
-  attr :label, :string, required: true
-  attr :field_name, :string, required: true
-  attr :selected_uuid, :string, default: nil
-  attr :admin?, :boolean, required: true
-  attr :selectable_users, :list, required: true
+  attr(:label, :string, required: true)
+  attr(:field_name, :string, required: true)
+  attr(:selected_uuid, :string, default: nil)
+  attr(:admin?, :boolean, required: true)
+  attr(:selectable_users, :list, required: true)
 
   def responsibility_field(assigns) do
     ~H"""

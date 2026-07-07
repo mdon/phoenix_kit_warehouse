@@ -26,7 +26,7 @@ defmodule PhoenixKitWarehouse.Web.SupplierOrderFormLive do
   alias PhoenixKitWarehouse.SupplierOrders
   alias PhoenixKitWarehouse.StorageFolders
   alias PhoenixKitWarehouse.Web.Components.{CommentsPanel, WarehouseBrowser}
-  
+
   alias PhoenixKit.Utils.Routes
   alias PhoenixKitCatalogue.Catalogue
 
@@ -177,7 +177,10 @@ defmodule PhoenixKitWarehouse.Web.SupplierOrderFormLive do
       |> assign(:sub_order_ref, sub_order_ref)
       |> assign(:received_summary, received_summary)
       |> assign(:source_refs, source_refs)
-      |> assign(:page_title, dgettext("default", "Supplier Order #%{number}", number: order.number))
+      |> assign(
+        :page_title,
+        dgettext("default", "Supplier Order #%{number}", number: order.number)
+      )
 
     if same_order?, do: socket, else: assign_edit_buffer(socket, order)
   end
@@ -425,7 +428,8 @@ defmodule PhoenixKitWarehouse.Web.SupplierOrderFormLive do
          )}
 
       {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, dgettext("default", "Failed to post supplier order"))}
+        {:noreply,
+         put_flash(socket, :error, dgettext("default", "Failed to post supplier order"))}
     end
   end
 
@@ -454,7 +458,8 @@ defmodule PhoenixKitWarehouse.Web.SupplierOrderFormLive do
          |> push_navigate(to: Routes.path("/admin/andi/warehouse/goods-receipts/#{receipt.uuid}"))}
 
       {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, dgettext("default", "Failed to create goods receipt"))}
+        {:noreply,
+         put_flash(socket, :error, dgettext("default", "Failed to create goods receipt"))}
     end
   end
 
@@ -1141,9 +1146,9 @@ defmodule PhoenixKitWarehouse.Web.SupplierOrderFormLive do
   # Function component: lines table
   # ---------------------------------------------------------------------------
 
-  attr :lines, :list, required: true
-  attr :posted?, :boolean, required: true
-  attr :received_summary, :map, default: %{}
+  attr(:lines, :list, required: true)
+  attr(:posted?, :boolean, required: true)
+  attr(:received_summary, :map, default: %{})
 
   defp supplier_order_lines_table(assigns) do
     ~H"""

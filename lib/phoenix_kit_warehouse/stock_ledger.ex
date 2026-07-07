@@ -167,15 +167,16 @@ defmodule PhoenixKitWarehouse.StockLedger do
     # Additive conflict resolution: quantity = existing + incoming
     on_conflict_query =
       if is_nil(unit_value_d) do
-        from s in Stock,
+        from(s in Stock,
           update: [
             set: [
               quantity: fragment("? + EXCLUDED.quantity", s.quantity),
               updated_at: ^(DateTime.utc_now() |> DateTime.truncate(:second))
             ]
           ]
+        )
       else
-        from s in Stock,
+        from(s in Stock,
           update: [
             set: [
               quantity: fragment("? + EXCLUDED.quantity", s.quantity),
@@ -183,6 +184,7 @@ defmodule PhoenixKitWarehouse.StockLedger do
               updated_at: ^(DateTime.utc_now() |> DateTime.truncate(:second))
             ]
           ]
+        )
       end
 
     target_repo.insert(changeset,

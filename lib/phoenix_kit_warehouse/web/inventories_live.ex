@@ -32,7 +32,7 @@ defmodule PhoenixKitWarehouse.Web.InventoriesLive do
   # `LayoutWrapper.app_layout` in render/1 and pushes its title into the global
   # admin header. A LiveView-level on_mount runs after the live_session hooks, so
   # the reset sticks. Same pattern as orders/index.ex.
-  on_mount {__MODULE__, :self_wrapped_layout}
+  on_mount({__MODULE__, :self_wrapped_layout})
 
   def on_mount(:self_wrapped_layout, _params, _session, socket) do
     {:cont, put_in(socket.private[:live_layout], {PhoenixKitWeb.Layouts, :app})}
@@ -404,11 +404,11 @@ defmodule PhoenixKitWarehouse.Web.InventoriesLive do
     """
   end
 
-  attr :by, :string, required: true
-  attr :label, :string, required: true
-  attr :sort_by, :string, required: true
-  attr :sort_dir, :atom, required: true
-  attr :align, :atom, default: :left
+  attr(:by, :string, required: true)
+  attr(:label, :string, required: true)
+  attr(:sort_by, :string, required: true)
+  attr(:sort_dir, :atom, required: true)
+  attr(:align, :atom, default: :left)
 
   defp sort_header(assigns) do
     assigns = assign(assigns, :active?, assigns.sort_by == assigns.by)

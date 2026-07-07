@@ -56,13 +56,21 @@ defmodule PhoenixKitWarehouse.StorageFolders do
   """
   def ensure_for_goods_receipt(receipt, admin_user_uuid)
 
-  def ensure_for_goods_receipt(%GoodsReceipt{storage_folder_uuid: uuid} = receipt, admin_user_uuid)
+  def ensure_for_goods_receipt(
+        %GoodsReceipt{storage_folder_uuid: uuid} = receipt,
+        admin_user_uuid
+      )
       when not is_nil(uuid) do
     ensure_cached(receipt, admin_user_uuid, "goods-receipt", &GoodsReceipts.set_storage_folder/2)
   end
 
   def ensure_for_goods_receipt(%GoodsReceipt{} = receipt, admin_user_uuid) do
-    create_and_cache(receipt, admin_user_uuid, "goods-receipt", &GoodsReceipts.set_storage_folder/2)
+    create_and_cache(
+      receipt,
+      admin_user_uuid,
+      "goods-receipt",
+      &GoodsReceipts.set_storage_folder/2
+    )
   end
 
   @doc """
@@ -88,13 +96,21 @@ defmodule PhoenixKitWarehouse.StorageFolders do
   """
   def ensure_for_supplier_order(order, admin_user_uuid)
 
-  def ensure_for_supplier_order(%SupplierOrder{storage_folder_uuid: uuid} = order, admin_user_uuid)
+  def ensure_for_supplier_order(
+        %SupplierOrder{storage_folder_uuid: uuid} = order,
+        admin_user_uuid
+      )
       when not is_nil(uuid) do
     ensure_cached(order, admin_user_uuid, "supplier-order", &SupplierOrders.set_storage_folder/2)
   end
 
   def ensure_for_supplier_order(%SupplierOrder{} = order, admin_user_uuid) do
-    create_and_cache(order, admin_user_uuid, "supplier-order", &SupplierOrders.set_storage_folder/2)
+    create_and_cache(
+      order,
+      admin_user_uuid,
+      "supplier-order",
+      &SupplierOrders.set_storage_folder/2
+    )
   end
 
   @doc """
@@ -119,7 +135,13 @@ defmodule PhoenixKitWarehouse.StorageFolders do
       nil ->
         # Folder was deleted from /admin/media — clear the dangling link and re-create
         {:ok, _} = set_folder_fn.(doc, nil)
-        create_and_cache(%{doc | storage_folder_uuid: nil}, admin_user_uuid, prefix, set_folder_fn)
+
+        create_and_cache(
+          %{doc | storage_folder_uuid: nil},
+          admin_user_uuid,
+          prefix,
+          set_folder_fn
+        )
 
       folder ->
         {:ok, folder}

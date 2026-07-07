@@ -175,7 +175,10 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
       |> assign(:child_supplier_order_refs, child_supplier_order_refs)
       |> assign(:child_goods_issue_refs, child_goods_issue_refs)
       |> assign(:source_refs, source_refs)
-      |> assign(:page_title, dgettext("default", "Internal Order #%{number}", number: order.number))
+      |> assign(
+        :page_title,
+        dgettext("default", "Internal Order #%{number}", number: order.number)
+      )
 
     if same_order?, do: socket, else: assign_edit_buffer(socket, order, locale)
   end
@@ -608,7 +611,8 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
        |> push_navigate(to: Routes.path("/admin/andi/warehouse/internal-orders"))}
     else
       {:error, :not_draft} ->
-        {:noreply, put_flash(socket, :error, dgettext("default", "Document is already conducted"))}
+        {:noreply,
+         put_flash(socket, :error, dgettext("default", "Document is already conducted"))}
 
       {:error, _reason} ->
         {:noreply,
@@ -1289,10 +1293,10 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
   # Function components
   # ---------------------------------------------------------------------------
 
-  attr :lines, :list, required: true
-  attr :names, :map, required: true
-  attr :posted?, :boolean, required: true
-  attr :locale, :string, required: true
+  attr(:lines, :list, required: true)
+  attr(:names, :map, required: true)
+  attr(:posted?, :boolean, required: true)
+  attr(:locale, :string, required: true)
 
   defp internal_order_lines_table(assigns) do
     ~H"""

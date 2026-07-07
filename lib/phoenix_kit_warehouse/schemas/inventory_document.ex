@@ -10,20 +10,20 @@ defmodule PhoenixKitWarehouse.InventoryDocument do
   @statuses ~w(draft posted)
 
   schema "phoenix_kit_warehouse_inventory_documents" do
-    field :number, :integer, read_after_writes: true
-    field :status, :string, default: "draft"
-    field :track_value, :boolean, default: false
+    field(:number, :integer, read_after_writes: true)
+    field(:status, :string, default: "draft")
+    field(:track_value, :boolean, default: false)
     # Warehouse the count was performed at. Set programmatically (defaults to
     # the configured default warehouse) — single-warehouse for now.
-    field :location_uuid, Ecto.UUID
-    field :storage_folder_uuid, Ecto.UUID
-    field :note, :string
-    field :lines, {:array, :map}, default: []
-    field :created_by_uuid, Ecto.UUID
-    field :performed_by_uuid, Ecto.UUID
-    field :posted_at, :utc_datetime
-    field :deleted_at, :utc_datetime
-    field :deleted_by_uuid, Ecto.UUID
+    field(:location_uuid, Ecto.UUID)
+    field(:storage_folder_uuid, Ecto.UUID)
+    field(:note, :string)
+    field(:lines, {:array, :map}, default: [])
+    field(:created_by_uuid, Ecto.UUID)
+    field(:performed_by_uuid, Ecto.UUID)
+    field(:posted_at, :utc_datetime)
+    field(:deleted_at, :utc_datetime)
+    field(:deleted_by_uuid, Ecto.UUID)
 
     timestamps(type: :utc_datetime)
   end
