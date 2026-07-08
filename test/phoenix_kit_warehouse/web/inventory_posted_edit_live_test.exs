@@ -70,7 +70,7 @@ defmodule PhoenixKitWarehouse.Web.InventoryPostedEditLiveTest do
   end
 
   defp edit_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventory/#{uuid}")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/inventory/#{uuid}")
 
   # Returns the count of phoenix_kit_activities rows for a given resource_uuid
   # and optional action filter.
@@ -143,7 +143,7 @@ defmodule PhoenixKitWarehouse.Web.InventoryPostedEditLiveTest do
     test "non-admin is redirected away from the admin inventory page (admin-gated route)", %{
       conn: conn
     } do
-      # The /admin/andi/warehouse/inventory/:uuid route is behind
+      # The /admin/warehouse/inventory/:uuid route is behind
       # :phoenix_kit_ensure_admin — a confirmed but non-admin user is redirected.
       regular = create_regular_user()
       conn = log_in(conn, regular)

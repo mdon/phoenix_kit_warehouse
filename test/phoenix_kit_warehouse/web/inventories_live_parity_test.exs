@@ -31,8 +31,8 @@ defmodule PhoenixKitWarehouse.Web.InventoriesLiveParityTest do
     doc
   end
 
-  defp inv_path, do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventories")
-  defp stock_path, do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse")
+  defp inv_path, do: PhoenixKit.Utils.Routes.path("/admin/warehouse/inventories")
+  defp stock_path, do: PhoenixKit.Utils.Routes.path("/admin/warehouse")
 
   test "inventories tab renders the parity toolbar", %{conn: conn} do
     a = admin()
@@ -50,11 +50,11 @@ defmodule PhoenixKitWarehouse.Web.InventoriesLiveParityTest do
     {:ok, lv, _} = live(login(conn, a), inv_path())
 
     html = render_change(element(lv, ~s(form[phx-change="search"])), %{"search" => "alpha"})
-    assert html =~ "/admin/andi/warehouse/inventory/#{d1.uuid}"
-    refute html =~ "/admin/andi/warehouse/inventory/#{d2.uuid}"
+    assert html =~ "/admin/warehouse/inventory/#{d1.uuid}"
+    refute html =~ "/admin/warehouse/inventory/#{d2.uuid}"
 
     html = render_change(element(lv, ~s(form[phx-change="search"])), %{"search" => ""})
-    assert html =~ "/admin/andi/warehouse/inventory/#{d2.uuid}"
+    assert html =~ "/admin/warehouse/inventory/#{d2.uuid}"
   end
 
   test "clicking a sortable header toggles sort and shows a chevron", %{conn: conn} do

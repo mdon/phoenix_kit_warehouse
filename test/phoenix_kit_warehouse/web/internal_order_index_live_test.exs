@@ -39,7 +39,7 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderIndexLiveTest do
     conn |> Plug.Test.init_test_session(%{}) |> Plug.Conn.put_session(:user_token, token)
   end
 
-  defp index_path, do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/internal-orders")
+  defp index_path, do: PhoenixKit.Utils.Routes.path("/admin/warehouse/internal-orders")
 
   defp create_draft(attrs \\ %{}) do
     {:ok, order} =
@@ -75,7 +75,7 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderIndexLiveTest do
 
       {:error, {:live_redirect, %{to: edit_path}}} = live(conn, new_path)
 
-      assert edit_path =~ ~r{/admin/andi/warehouse/internal-orders/[0-9a-f-]+$}
+      assert edit_path =~ ~r{/admin/warehouse/internal-orders/[0-9a-f-]+$}
 
       {:ok, _form_lv, html} = live(conn, edit_path)
 

@@ -51,19 +51,19 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLiveTabsTest do
     conn |> Plug.Test.init_test_session(%{}) |> Plug.Conn.put_session(:user_token, token)
   end
 
-  defp new_path, do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventory/new")
+  defp new_path, do: PhoenixKit.Utils.Routes.path("/admin/warehouse/inventory/new")
 
   defp edit_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventory/#{uuid}")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/inventory/#{uuid}")
 
   defp items_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventory/#{uuid}/items")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/inventory/#{uuid}/items")
 
   defp files_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventory/#{uuid}/files")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/inventory/#{uuid}/files")
 
   defp comments_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventory/#{uuid}/comments")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/inventory/#{uuid}/comments")
 
   defp create_catalogue!(name) do
     {:ok, cat} =
@@ -104,7 +104,7 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLiveTabsTest do
       case result do
         {:error, {:live_redirect, %{to: redirect_to}}} ->
           # Redirect lands on /inventory/:uuid
-          assert redirect_to =~ "/admin/andi/warehouse/inventory/"
+          assert redirect_to =~ "/admin/warehouse/inventory/"
           refute redirect_to =~ "/new"
 
           # The UUID in the redirect path is a valid draft in the DB
@@ -208,7 +208,7 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLiveTabsTest do
       case live(conn, new_path()) do
         {:error, {:live_redirect, %{to: redirect_to}}} ->
           # The redirect is to a persisted UUID, not to :new
-          assert redirect_to =~ "/admin/andi/warehouse/inventory/"
+          assert redirect_to =~ "/admin/warehouse/inventory/"
           refute redirect_to =~ "/new"
 
         {:ok, _lv, _html} ->

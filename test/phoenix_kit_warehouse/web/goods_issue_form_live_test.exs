@@ -90,16 +90,16 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueFormLiveTest do
   end
 
   defp edit_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/goods-issues/#{uuid}")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/goods-issues/#{uuid}")
 
   defp lines_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/goods-issues/#{uuid}/lines")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/goods-issues/#{uuid}/lines")
 
   defp files_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/goods-issues/#{uuid}/files")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/goods-issues/#{uuid}/files")
 
   defp comments_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/goods-issues/#{uuid}/comments")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/goods-issues/#{uuid}/comments")
 
   # ---------------------------------------------------------------------------
   # General tab — draft
@@ -262,7 +262,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueFormLiveTest do
       assert {:error, {:live_redirect, %{to: redirect_to}}} =
                lv |> element("button", "Issue") |> render_click()
 
-      assert String.contains?(redirect_to, "/admin/andi/warehouse/goods-issues")
+      assert String.contains?(redirect_to, "/admin/warehouse/goods-issues")
 
       {:ok, posted} = GoodsIssues.get_goods_issue(issue.uuid)
       assert posted.status == "posted"

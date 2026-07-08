@@ -74,16 +74,16 @@ defmodule PhoenixKitWarehouse.Web.SupplierOrderFormLiveTest do
   end
 
   defp edit_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/supplier-orders/#{uuid}")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/supplier-orders/#{uuid}")
 
   defp lines_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/supplier-orders/#{uuid}/lines")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/supplier-orders/#{uuid}/lines")
 
   defp files_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/supplier-orders/#{uuid}/files")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/supplier-orders/#{uuid}/files")
 
   defp comments_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/supplier-orders/#{uuid}/comments")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/supplier-orders/#{uuid}/comments")
 
   # ---------------------------------------------------------------------------
   # General tab — draft
@@ -249,7 +249,7 @@ defmodule PhoenixKitWarehouse.Web.SupplierOrderFormLiveTest do
       assert {:error, {:live_redirect, %{to: redirect_to}}} =
                lv |> element("button", "Post") |> render_click()
 
-      assert String.contains?(redirect_to, "/admin/andi/warehouse/supplier-orders")
+      assert String.contains?(redirect_to, "/admin/warehouse/supplier-orders")
 
       {:ok, posted} = SupplierOrders.get_supplier_order(order.uuid)
       assert posted.status == "posted"

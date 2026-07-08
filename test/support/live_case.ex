@@ -20,7 +20,7 @@ defmodule PhoenixKitWarehouse.LiveCase do
         use PhoenixKitWarehouse.LiveCase
 
         test "renders", %{conn: conn} do
-          {:ok, view, html} = live(conn, "/en/admin/andi/warehouse")
+          {:ok, view, html} = live(conn, "/en/admin/warehouse")
           assert html =~ "In stock"
         end
       end

@@ -40,16 +40,16 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLiveTest do
   end
 
   defp edit_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/internal-orders/#{uuid}")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/internal-orders/#{uuid}")
 
   defp items_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/internal-orders/#{uuid}/items")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/internal-orders/#{uuid}/items")
 
   defp files_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/internal-orders/#{uuid}/files")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/internal-orders/#{uuid}/files")
 
   defp comments_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/internal-orders/#{uuid}/comments")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/internal-orders/#{uuid}/comments")
 
   defp create_draft do
     {:ok, order} =
@@ -115,7 +115,7 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLiveTest do
       assert {:error, {:live_redirect, %{to: redirect_to}}} =
                lv |> element("button", "Conduct") |> render_click()
 
-      assert String.contains?(redirect_to, "/admin/andi/warehouse/internal-orders")
+      assert String.contains?(redirect_to, "/admin/warehouse/internal-orders")
 
       # Verify the order is now posted
       {:ok, posted} = InternalOrders.get_internal_order(order.uuid)

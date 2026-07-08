@@ -39,10 +39,10 @@ defmodule PhoenixKitWarehouse.Web.InventoriesLiveTabsTest do
     conn |> Plug.Test.init_test_session(%{}) |> Plug.Conn.put_session(:user_token, token)
   end
 
-  defp warehouse_path, do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse")
+  defp warehouse_path, do: PhoenixKit.Utils.Routes.path("/admin/warehouse")
 
   defp inventories_path,
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventories")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/inventories")
 
   defp create_catalogue!(name_suffix) do
     {:ok, cat} =
@@ -74,7 +74,7 @@ defmodule PhoenixKitWarehouse.Web.InventoriesLiveTabsTest do
   # ---------------------------------------------------------------------------
 
   describe "tab routes and active state" do
-    test "stock tab is active on /admin/andi/warehouse", %{conn: conn} do
+    test "stock tab is active on /admin/warehouse", %{conn: conn} do
       admin = create_admin_user()
       conn = log_in_admin(conn, admin)
 
@@ -84,7 +84,7 @@ defmodule PhoenixKitWarehouse.Web.InventoriesLiveTabsTest do
       assert html =~ ~r/tab-active[^>]*>.*In stock/s
     end
 
-    test "inventories tab is active on /admin/andi/warehouse/inventories", %{conn: conn} do
+    test "inventories tab is active on /admin/warehouse/inventories", %{conn: conn} do
       admin = create_admin_user()
       conn = log_in_admin(conn, admin)
 
@@ -269,7 +269,7 @@ defmodule PhoenixKitWarehouse.Web.InventoriesLiveTabsTest do
 
       {:ok, _lv, html} = live(conn, inventories_path())
 
-      edit_path = PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventory/#{doc.uuid}")
+      edit_path = PhoenixKit.Utils.Routes.path("/admin/warehouse/inventory/#{doc.uuid}")
       assert html =~ edit_path
     end
   end

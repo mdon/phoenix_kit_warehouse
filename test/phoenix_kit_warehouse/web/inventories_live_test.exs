@@ -33,8 +33,8 @@ defmodule PhoenixKitWarehouse.Web.InventoriesLiveTest do
     conn |> Plug.Test.init_test_session(%{}) |> Plug.Conn.put_session(:user_token, token)
   end
 
-  defp warehouse_path, do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse")
-  defp inventories_path, do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventories")
+  defp warehouse_path, do: PhoenixKit.Utils.Routes.path("/admin/warehouse")
+  defp inventories_path, do: PhoenixKit.Utils.Routes.path("/admin/warehouse/inventories")
 
   defp create_catalogue! do
     # Intentionally NOT ANDI-prefixed: the warehouse shows ALL active catalogues
@@ -83,7 +83,7 @@ defmodule PhoenixKitWarehouse.Web.InventoriesLiveTest do
       # tab toolbar, not in the shared header on the in-stock tab.
       {:ok, _lv, html} = live(conn, inventories_path())
 
-      expected_path = PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventory/new")
+      expected_path = PhoenixKit.Utils.Routes.path("/admin/warehouse/inventory/new")
       assert html =~ expected_path
     end
 

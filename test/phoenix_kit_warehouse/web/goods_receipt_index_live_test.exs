@@ -62,7 +62,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptIndexLiveTest do
   end
 
   defp index_path,
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/goods-receipts")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/goods-receipts")
 
   # ---------------------------------------------------------------------------
   # Tests
@@ -89,7 +89,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptIndexLiveTest do
 
       {:error, {:live_redirect, %{to: edit_path}}} = live(conn, new_path)
 
-      assert edit_path =~ ~r{/admin/andi/warehouse/goods-receipts/[0-9a-f-]+$}
+      assert edit_path =~ ~r{/admin/warehouse/goods-receipts/[0-9a-f-]+$}
 
       {:ok, _form_lv, html} = live(conn, edit_path)
 

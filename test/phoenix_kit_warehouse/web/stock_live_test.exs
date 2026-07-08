@@ -23,7 +23,7 @@ defmodule PhoenixKitWarehouse.Web.StockLiveTest do
     conn |> Plug.Test.init_test_session(%{}) |> Plug.Conn.put_session(:user_token, t)
   end
 
-  defp path, do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse")
+  defp path, do: PhoenixKit.Utils.Routes.path("/admin/warehouse")
 
   test "default view is grouped — no parity toolbar", %{conn: conn} do
     {:ok, _lv, html} = live(login(conn, admin()), path())

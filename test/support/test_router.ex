@@ -25,7 +25,7 @@ defmodule PhoenixKitWarehouse.Test.Router do
     plug(:protect_from_forgery)
   end
 
-  scope "/en/admin/andi/warehouse", PhoenixKitWarehouse.Web do
+  scope "/en/admin/warehouse", PhoenixKitWarehouse.Web do
     pipe_through(:browser)
 
     live_session :warehouse_test,

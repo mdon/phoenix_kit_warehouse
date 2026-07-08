@@ -60,13 +60,13 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLiveCommentsAndModalTest do
   end
 
   defp edit_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventory/#{uuid}")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/inventory/#{uuid}")
 
   defp items_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventory/#{uuid}/items")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/inventory/#{uuid}/items")
 
   defp comments_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventory/#{uuid}/comments")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/inventory/#{uuid}/comments")
 
   defp create_catalogue!(name) do
     {:ok, cat} =
@@ -481,7 +481,7 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLiveCommentsAndModalTest do
   # ---------------------------------------------------------------------------
 
   describe "stock_sheet catalogue header totals" do
-    defp warehouse_path, do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse")
+    defp warehouse_path, do: PhoenixKit.Utils.Routes.path("/admin/warehouse")
 
     test "stock_sheet shows Total label in catalogue section header", %{conn: conn} do
       admin = create_admin_user()

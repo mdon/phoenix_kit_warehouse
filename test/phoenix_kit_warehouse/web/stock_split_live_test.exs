@@ -23,8 +23,8 @@ defmodule PhoenixKitWarehouse.Web.StockSplitLiveTest do
     conn |> Plug.Test.init_test_session(%{}) |> Plug.Conn.put_session(:user_token, t)
   end
 
-  defp stock_path, do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse")
-  defp inv_path, do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventories")
+  defp stock_path, do: PhoenixKit.Utils.Routes.path("/admin/warehouse")
+  defp inv_path, do: PhoenixKit.Utils.Routes.path("/admin/warehouse/inventories")
 
   test "stock route renders the grouped stock view via StockLive", %{conn: conn} do
     {:ok, _lv, html} = live(login(conn, admin()), stock_path())

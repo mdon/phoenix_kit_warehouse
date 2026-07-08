@@ -134,16 +134,16 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLiveTest do
   end
 
   defp edit_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/goods-receipts/#{uuid}")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/goods-receipts/#{uuid}")
 
   defp lines_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/goods-receipts/#{uuid}/lines")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/goods-receipts/#{uuid}/lines")
 
   defp files_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/goods-receipts/#{uuid}/files")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/goods-receipts/#{uuid}/files")
 
   defp comments_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/goods-receipts/#{uuid}/comments")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/goods-receipts/#{uuid}/comments")
 
   # ---------------------------------------------------------------------------
   # General tab — draft
@@ -308,7 +308,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLiveTest do
       assert {:error, {:live_redirect, %{to: redirect_to}}} =
                lv |> element("button", "Conduct") |> render_click()
 
-      assert String.contains?(redirect_to, "/admin/andi/warehouse/goods-receipts")
+      assert String.contains?(redirect_to, "/admin/warehouse/goods-receipts")
 
       {:ok, posted} = GoodsReceipts.get_goods_receipt(receipt.uuid)
       assert posted.status == "posted"
@@ -581,7 +581,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLiveTest do
       {so, _supplier} = create_posted_supplier_order!(admin.uuid)
 
       so_edit_path =
-        PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/supplier-orders/#{so.uuid}")
+        PhoenixKit.Utils.Routes.path("/admin/warehouse/supplier-orders/#{so.uuid}")
 
       {:ok, _lv, html} = live(conn, so_edit_path)
 
@@ -594,14 +594,14 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLiveTest do
       {so, _supplier} = create_posted_supplier_order!(admin.uuid)
 
       so_edit_path =
-        PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/supplier-orders/#{so.uuid}")
+        PhoenixKit.Utils.Routes.path("/admin/warehouse/supplier-orders/#{so.uuid}")
 
       {:ok, lv, _html} = live(conn, so_edit_path)
 
       assert {:error, {:live_redirect, %{to: redirect_to}}} =
                lv |> element("button", "Register receipt") |> render_click()
 
-      assert String.contains?(redirect_to, "/admin/andi/warehouse/goods-receipts/")
+      assert String.contains?(redirect_to, "/admin/warehouse/goods-receipts/")
     end
   end
 

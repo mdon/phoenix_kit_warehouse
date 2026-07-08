@@ -41,10 +41,10 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLiveTest do
     conn |> Plug.Test.init_test_session(%{}) |> Plug.Conn.put_session(:user_token, token)
   end
 
-  defp new_path, do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventory/new")
+  defp new_path, do: PhoenixKit.Utils.Routes.path("/admin/warehouse/inventory/new")
 
   defp edit_path(uuid),
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/inventory/#{uuid}")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/inventory/#{uuid}")
 
   # :new immediately creates a draft and redirects to its edit page (General tab).
   # The count sheet lives on the Items tab, so follow the redirect and land there.

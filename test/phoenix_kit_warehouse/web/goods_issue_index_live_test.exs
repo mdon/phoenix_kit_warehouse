@@ -46,7 +46,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueIndexLiveTest do
   end
 
   defp index_path,
-    do: PhoenixKit.Utils.Routes.path("/admin/andi/warehouse/goods-issues")
+    do: PhoenixKit.Utils.Routes.path("/admin/warehouse/goods-issues")
 
   describe "GoodsIssueIndex" do
     test "renders the goods issues list page", %{conn: conn} do
@@ -70,7 +70,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueIndexLiveTest do
 
       {:error, {:live_redirect, %{to: edit_path}}} = live(conn, new_path)
 
-      assert edit_path =~ ~r{/admin/andi/warehouse/goods-issues/[0-9a-f-]+$}
+      assert edit_path =~ ~r{/admin/warehouse/goods-issues/[0-9a-f-]+$}
 
       {:ok, _form_lv, html} = live(conn, edit_path)
 

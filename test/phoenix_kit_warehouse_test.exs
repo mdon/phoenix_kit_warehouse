@@ -35,7 +35,7 @@ defmodule PhoenixKitWarehouseTest do
       root = Enum.find(PhoenixKitWarehouse.admin_tabs(), &(&1.id == :warehouse))
       assert root.match == :exact
       assert root.live_view == {PhoenixKitWarehouse.Web.StockLive, :index}
-      assert root.path == "andi/warehouse"
+      assert root.path == "warehouse"
     end
 
     test "admin_tabs/0 preserves every hidden CRUD tab's priority from today's config.exs" do
