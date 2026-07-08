@@ -96,15 +96,15 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLiveCommentsAndModalTest do
   # ---------------------------------------------------------------------------
 
   describe "comments availability" do
-    test "InventoryComments.available?/0 reflects comments module state" do
+    test "Comments.available?/0 reflects comments module state" do
       # The comments module is installed in this project.
       # Whatever value it returns, it must be a boolean.
       result = Comments.available?()
       assert is_boolean(result)
     end
 
-    test "resource_type/0 returns \"inventory\"" do
-      assert InventoryComments.resource_type() == "inventory"
+    test "resource_type/1 returns \"inventory\"" do
+      assert Comments.resource_type(:inventory) == "inventory"
     end
 
     test "comments tab link is present for a saved document", %{conn: conn} do
@@ -178,8 +178,8 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLiveCommentsAndModalTest do
       assert Comments.count(:inventory, unknown_uuid) == 0
     end
 
-    test "counts/1 returns an empty map for an empty list" do
-      assert InventoryComments.counts([]) == %{}
+    test "counts/2 returns an empty map for an empty list" do
+      assert Comments.counts(:inventory, []) == %{}
     end
   end
 

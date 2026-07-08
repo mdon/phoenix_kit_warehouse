@@ -41,12 +41,16 @@ defmodule PhoenixKitWarehouse.ViewConfigs do
   Merges `partial` into the user's existing view config for `scope` and
   persists the result. Keys absent from `partial` are preserved.
   """
-  @spec merge_view_config(binary(), String.t(), map()) :: {:ok, map()}
+  @spec merge_view_config(binary(), String.t(), map()) ::
+          {:ok, map()} | {:error, Ecto.Changeset.t()}
   def merge_view_config(user_uuid, scope, partial)
       when is_binary(user_uuid) and is_binary(scope) and is_map(partial) do
     merged = Map.merge(get_view_config(user_uuid, scope), partial)
-    Settings.update_setting(setting_key(user_uuid, scope), Jason.encode!(merged))
-    {:ok, merged}
+
+    case Settings.update_setting(setting_key(user_uuid, scope), Jason.encode!(merged)) do
+      {:ok, _setting} -> {:ok, merged}
+      {:error, changeset} -> {:error, changeset}
+    end
   end
 
   defp setting_key(user_uuid, scope), do: "warehouse_view_config:#{scope}:#{user_uuid}"

@@ -552,12 +552,6 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLive do
     end
   end
 
-  defp maybe_add_responsibility_change(acc, _key, same, same), do: acc
-
-  defp maybe_add_responsibility_change(acc, key, from, to) do
-    Map.put(acc, key, {from, to})
-  end
-
   # ---------------------------------------------------------------------------
   # Save draft
   # ---------------------------------------------------------------------------
@@ -1344,6 +1338,12 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLive do
 
   defp maybe_add_scalar_change(acc, key, from, to) do
     Map.put(acc, key, %{from: to_string(from), to: to_string(to)})
+  end
+
+  defp maybe_add_responsibility_change(acc, _key, same, same), do: acc
+
+  defp maybe_add_responsibility_change(acc, key, from, to) do
+    Map.put(acc, key, {from, to})
   end
 
   defp maybe_add_lines_change(acc, old_lines, new_lines) do
