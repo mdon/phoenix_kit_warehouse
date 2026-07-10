@@ -14,7 +14,15 @@ defmodule PhoenixKitWarehouse.MixProject do
       deps: deps(),
       description: "Warehouse module for PhoenixKit — inventory, stock, goods receipts/issues.",
       package: package(),
-      dialyzer: [plt_add_apps: [:phoenix_kit]],
+      dialyzer: [
+        plt_add_apps: [
+          :phoenix_kit,
+          :phoenix_kit_billing,
+          :phoenix_kit_catalogue,
+          :phoenix_kit_comments,
+          :phoenix_kit_locations
+        ]
+      ],
       name: "PhoenixKitWarehouse",
       source_url: @source_url,
       docs: docs(),
@@ -24,7 +32,14 @@ defmodule PhoenixKitWarehouse.MixProject do
 
   def application do
     [
-      extra_applications: [:logger, :phoenix_kit]
+      extra_applications: [
+        :logger,
+        :phoenix_kit,
+        :phoenix_kit_billing,
+        :phoenix_kit_catalogue,
+        :phoenix_kit_comments,
+        :phoenix_kit_locations
+      ]
     ]
   end
 
@@ -70,11 +85,16 @@ defmodule PhoenixKitWarehouse.MixProject do
   defp deps do
     [
       pk_dep(:phoenix_kit, "~> 1.7"),
+      # Sibling PhoenixKit modules the warehouse UI/contexts build on:
+      # comments embeds, catalogue products, locations, and billing currency.
+      pk_dep(:phoenix_kit_billing, "~> 0.5"),
+      pk_dep(:phoenix_kit_catalogue, "~> 0.10"),
+      pk_dep(:phoenix_kit_comments, "~> 0.2"),
+      pk_dep(:phoenix_kit_locations, "~> 0.2"),
       {:phoenix_live_view, "~> 1.1"},
       {:ex_doc, "~> 0.39", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:lazy_html, ">= 0.1.0", only: :test}
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 
