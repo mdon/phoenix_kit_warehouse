@@ -9,6 +9,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLiveTest do
   alias PhoenixKitWarehouse.InternalOrders
   alias PhoenixKitWarehouse.SupplierOrders
   alias PhoenixKitCatalogue.Catalogue
+  alias PhoenixKitLocations.Locations
 
   @default_location_uuid "00000000-0000-0000-0000-000000000001"
 
@@ -144,6 +145,24 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLiveTest do
 
   defp comments_path(uuid),
     do: PhoenixKit.Utils.Routes.path("/admin/warehouse/goods-receipts/#{uuid}/comments")
+
+  # Creates real Location records tagged with a fresh warehouse LocationType and
+  # marks that type as the warehouse type. The per-test sandbox rolls both the
+  # rows and the setting back, so no manual cleanup is needed.
+  defp setup_warehouses!(names) do
+    {:ok, type} =
+      Locations.create_location_type(%{name: "GR WH Type #{System.unique_integer([:positive])}"})
+
+    locations =
+      Enum.map(names, fn name ->
+        {:ok, loc} = Locations.create_location(%{name: name, status: "active"})
+        Locations.sync_location_types(loc.uuid, [type.uuid])
+        loc
+      end)
+
+    PhoenixKitWarehouse.StockLedger.set_warehouse_location_type_uuid(type.uuid)
+    locations
+  end
 
   # ---------------------------------------------------------------------------
   # General tab — draft
@@ -628,6 +647,69 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLiveTest do
       assert html =~ "Select all"
       refute has_element?(lv, "input[phx-value-uuid='#{so1.uuid}'][checked]")
       refute has_element?(lv, "input[phx-value-uuid='#{so2.uuid}'][checked]")
+    end
+  end
+
+  describe "warehouse selector" do
+    test "renders a warehouse select on the General tab of a draft", %{conn: conn} do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      [loc_a, loc_b] = setup_warehouses!(["GR Site A", "GR Site B"])
+
+      {:ok, receipt} =
+        GoodsReceipts.create_goods_receipt(%{
+          supplier_uuid: create_supplier!().uuid,
+          location_uuid: loc_a.uuid,
+          lines: []
+        })
+
+      {:ok, _lv, html} = live(conn, edit_path(receipt.uuid))
+
+      assert html =~ ~s(name="location_uuid")
+      assert html =~ "GR Site A"
+      assert html =~ "GR Site B"
+    end
+
+    test "changing the warehouse persists location_uuid on the draft", %{conn: conn} do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      [loc_a, loc_b] = setup_warehouses!(["GR Site A", "GR Site B"])
+
+      {:ok, receipt} =
+        GoodsReceipts.create_goods_receipt(%{
+          supplier_uuid: create_supplier!().uuid,
+          location_uuid: loc_a.uuid,
+          lines: []
+        })
+
+      {:ok, lv, _html} = live(conn, edit_path(receipt.uuid))
+
+      lv
+      |> element("form[phx-change='set_location']")
+      |> render_change(%{"location_uuid" => loc_b.uuid})
+
+      {:ok, updated} = GoodsReceipts.get_goods_receipt(receipt.uuid)
+      assert updated.location_uuid == loc_b.uuid
+    end
+
+    test "warehouse shows as read-only text once posted", %{conn: conn} do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      [loc_a, _loc_b] = setup_warehouses!(["GR Site A", "GR Site B"])
+
+      {:ok, receipt} =
+        GoodsReceipts.create_goods_receipt(%{
+          supplier_uuid: create_supplier!().uuid,
+          location_uuid: loc_a.uuid,
+          lines: []
+        })
+
+      {:ok, posted} = GoodsReceipts.post_goods_receipt(receipt, admin.uuid)
+
+      {:ok, _lv, html} = live(conn, edit_path(posted.uuid))
+
+      refute html =~ ~s(phx-change="set_location")
+      assert html =~ "GR Site A"
     end
   end
 end

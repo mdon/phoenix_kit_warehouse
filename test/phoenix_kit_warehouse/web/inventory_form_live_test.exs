@@ -7,6 +7,7 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLiveTest do
   alias PhoenixKitWarehouse.StockLedger, as: Warehouse
   alias PhoenixKitWarehouse.Inventories
   alias PhoenixKitCatalogue.Catalogue
+  alias PhoenixKitLocations.Locations
 
   # Start each test from a clean warehouse so count-sheet seeding (which reads
   # all current stock) is deterministic regardless of other data in the DB.
@@ -89,6 +90,21 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLiveTest do
       })
 
     item
+  end
+
+  defp setup_warehouses!(names) do
+    {:ok, type} =
+      Locations.create_location_type(%{name: "WH Type #{System.unique_integer([:positive])}"})
+
+    locations =
+      Enum.map(names, fn name ->
+        {:ok, loc} = Locations.create_location(%{name: name, status: "active"})
+        Locations.sync_location_types(loc.uuid, [type.uuid])
+        loc
+      end)
+
+    Warehouse.set_warehouse_location_type_uuid(type.uuid)
+    locations
   end
 
   # ---------------------------------------------------------------------------
@@ -293,6 +309,81 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLiveTest do
 
       assert html =~ ~s(phx-click="save_draft")
       assert html =~ ~s(phx-click="post")
+    end
+  end
+
+  describe "warehouse selector" do
+    test "renders a warehouse select on the General tab of a draft", %{conn: conn} do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      [loc_a, _loc_b] = setup_warehouses!(["Inv Site A", "Inv Site B"])
+      Warehouse.set_default_location_uuid(loc_a.uuid)
+
+      {:error, {:live_redirect, %{to: path}}} = live(conn, new_path())
+      {:ok, _lv, html} = live(conn, path)
+
+      assert html =~ ~s(name="location_uuid")
+      assert html =~ "Inv Site A"
+      assert html =~ "Inv Site B"
+    end
+
+    test "changing the warehouse asks for confirmation, then re-seeds the count sheet", %{
+      conn: conn
+    } do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      [loc_a, loc_b] = setup_warehouses!(["Inv Site A", "Inv Site B"])
+      Warehouse.set_default_location_uuid(loc_a.uuid)
+
+      cat = create_catalogue!()
+      item_a = create_active_item!(cat)
+      item_b = create_active_item!(cat)
+
+      {:ok, _} = Warehouse.upsert_quantity(item_a.uuid, "5", location_uuid: loc_a.uuid)
+      {:ok, _} = Warehouse.upsert_quantity(item_b.uuid, "9", location_uuid: loc_b.uuid)
+
+      # :new seeds the sheet from the default warehouse (loc_a → item_a).
+      {:error, {:live_redirect, %{to: path}}} = live(conn, new_path())
+      {:ok, lv, _html} = live(conn, path)
+      doc_uuid = path |> String.split("/") |> List.last()
+      assert Inventories.get_document!(doc_uuid).location_uuid == loc_a.uuid
+
+      # Changing the warehouse opens the confirmation modal.
+      lv
+      |> element("form[phx-change='set_location']")
+      |> render_change(%{"location_uuid" => loc_b.uuid})
+
+      assert has_element?(lv, "[phx-click='confirm_location_change']")
+
+      # Confirming re-seeds the sheet from loc_b (item_b), dropping item_a.
+      lv |> element("[phx-click='confirm_location_change']") |> render_click()
+
+      reloaded = Inventories.get_document!(doc_uuid)
+      assert reloaded.location_uuid == loc_b.uuid
+
+      seeded_uuids = Enum.map(reloaded.lines, & &1["item_uuid"])
+      assert item_b.uuid in seeded_uuids
+      refute item_a.uuid in seeded_uuids
+    end
+
+    test "cancelling the warehouse change leaves the document untouched", %{conn: conn} do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      [loc_a, loc_b] = setup_warehouses!(["Inv Site A", "Inv Site B"])
+      Warehouse.set_default_location_uuid(loc_a.uuid)
+
+      {:error, {:live_redirect, %{to: path}}} = live(conn, new_path())
+      {:ok, lv, _html} = live(conn, path)
+      doc_uuid = path |> String.split("/") |> List.last()
+
+      lv
+      |> element("form[phx-change='set_location']")
+      |> render_change(%{"location_uuid" => loc_b.uuid})
+
+      lv |> element("[phx-click='cancel_location_change']") |> render_click()
+
+      assert Inventories.get_document!(doc_uuid).location_uuid == loc_a.uuid
+      refute has_element?(lv, "[phx-click='confirm_location_change']")
     end
   end
 end

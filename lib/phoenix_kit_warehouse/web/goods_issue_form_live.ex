@@ -67,6 +67,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueFormLive do
       |> assign(:io_picker_selected, [])
       |> assign(:io_picker_selected_meta, %{})
       |> assign(:io_picker_query, "")
+      |> assign(:warehouses, StockLedger.list_warehouses())
       |> PhoenixKitWeb.Components.MediaBrowser.setup_uploads()
 
     {:ok, socket}
@@ -265,6 +266,32 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueFormLive do
   @impl true
   def handle_event("set_note", %{"note" => note}, socket) do
     {:noreply, assign(socket, :note, note)}
+  end
+
+  # ---------------------------------------------------------------------------
+  # Warehouse (location) selector — draft only
+  # ---------------------------------------------------------------------------
+
+  @impl true
+  def handle_event("set_location", %{"location_uuid" => uuid}, socket) do
+    case socket.assigns.issue do
+      %PhoenixKitWarehouse.GoodsIssue{status: "draft"} = issue ->
+        with {:ok, updated} <- GoodsIssues.update_draft(issue, %{location_uuid: uuid}) do
+          {:noreply,
+           socket
+           |> assign(:issue, updated)
+           |> assign(:location_name, resolve_location_name(updated.location_uuid))
+           |> put_flash(:info, dgettext("default", "Warehouse changed"))}
+        else
+          {:error, _changeset} ->
+            {:noreply,
+             put_flash(socket, :error, dgettext("default", "Failed to change warehouse"))}
+        end
+
+      _ ->
+        {:noreply,
+         put_flash(socket, :error, dgettext("default", "Cannot modify: document is not a draft"))}
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -742,10 +769,25 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueFormLive do
                     {dgettext("default", "Warehouse (location)")}
                   </dt>
                   <dd class="mt-0.5">
-                    <%= if @location_name do %>
-                      {@location_name}
+                    <%= if !@posted? and warehouse_options?(@warehouses) do %>
+                      <form phx-change="set_location" phx-submit="set_location">
+                        <select name="location_uuid" class="select select-sm select-bordered">
+                          <%= for warehouse <- @warehouses do %>
+                            <option
+                              value={warehouse.uuid}
+                              selected={@issue.location_uuid == warehouse.uuid}
+                            >
+                              {warehouse.name}
+                            </option>
+                          <% end %>
+                        </select>
+                      </form>
                     <% else %>
-                      <span class="text-base-content/40">{dgettext("default", "— not set —")}</span>
+                      <%= if @location_name do %>
+                        {@location_name}
+                      <% else %>
+                        <span class="text-base-content/40">{dgettext("default", "— not set —")}</span>
+                      <% end %>
                     <% end %>
                   </dd>
                 </div>
@@ -1125,4 +1167,8 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueFormLive do
   defp fmt_qty(nil), do: "0"
   defp fmt_qty(%Decimal{} = d), do: Decimal.to_string(d, :normal)
   defp fmt_qty(v), do: to_string(v)
+
+  defp warehouse_options?(nil), do: false
+  defp warehouse_options?([]), do: false
+  defp warehouse_options?(_), do: true
 end
