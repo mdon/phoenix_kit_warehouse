@@ -25,7 +25,7 @@ defmodule PhoenixKitWarehouse.Web.SupplierOrderFormLive do
   alias PhoenixKitWarehouse.Comments
   alias PhoenixKitWarehouse.SupplierOrders
   alias PhoenixKitWarehouse.StorageFolders
-  alias PhoenixKitWarehouse.Web.Components.{CommentsPanel, WarehouseBrowser}
+  alias PhoenixKitWarehouse.Web.Components.{CommentsPanel, RelatedDocuments, WarehouseBrowser}
 
   alias PhoenixKit.Utils.Routes
   alias PhoenixKitCatalogue.Catalogue
@@ -61,6 +61,7 @@ defmodule PhoenixKitWarehouse.Web.SupplierOrderFormLive do
       |> assign(:sub_order_ref, nil)
       |> assign(:received_summary, %{})
       |> assign(:source_refs, [])
+      |> assign(:child_goods_receipt_refs, [])
       |> assign(:suppliers, [])
       |> assign(:show_source_picker, false)
       |> assign(:picker_purpose, :import)
@@ -166,6 +167,7 @@ defmodule PhoenixKitWarehouse.Web.SupplierOrderFormLive do
 
     received_summary = SupplierOrders.received_summary(order)
     source_refs = DocRefs.refs_for(order.source_refs || [])
+    child_goods_receipt_refs = DocRefs.goods_receipt_refs_for_supplier_order(order.uuid)
 
     socket =
       socket
@@ -177,6 +179,7 @@ defmodule PhoenixKitWarehouse.Web.SupplierOrderFormLive do
       |> assign(:sub_order_ref, sub_order_ref)
       |> assign(:received_summary, received_summary)
       |> assign(:source_refs, source_refs)
+      |> assign(:child_goods_receipt_refs, child_goods_receipt_refs)
       |> assign(
         :page_title,
         dgettext("default", "Supplier Order #%{number}", number: order.number)
@@ -750,6 +753,7 @@ defmodule PhoenixKitWarehouse.Web.SupplierOrderFormLive do
     assigns = assign_new(assigns, :sub_order_ref, fn -> nil end)
     assigns = assign_new(assigns, :received_summary, fn -> %{} end)
     assigns = assign_new(assigns, :source_refs, fn -> [] end)
+    assigns = assign_new(assigns, :child_goods_receipt_refs, fn -> [] end)
 
     ~H"""
     <div class="flex flex-col mx-auto max-w-none sm:px-4 py-2 sm:py-6 gap-4">
@@ -980,40 +984,13 @@ defmodule PhoenixKitWarehouse.Web.SupplierOrderFormLive do
                   </div>
                 <% end %>
               </dl>
-              <%!-- Source refs links --%>
-              <div class="divider my-1"></div>
-              <div class="text-sm">
-                <p class="text-base-content/60 font-medium mb-2 flex items-center gap-1">
-                  {dgettext("default", "Source documents")}
-                  <button
-                    type="button"
-                    phx-click="open_link_picker"
-                    class="btn btn-2xs btn-ghost btn-circle"
-                    title={dgettext("default", "Attach")}
-                  >
-                    <.icon name="hero-plus" class="w-3 h-3" />
-                  </button>
-                </p>
-                <div class="flex flex-wrap gap-2">
-                  <span :if={@source_refs == []} class="text-base-content/30 text-sm">—</span>
-                  <%= for ref <- @source_refs do %>
-                    <span class="inline-flex items-center gap-1 bg-base-200 rounded px-2 py-0.5">
-                      <.link navigate={ref.path} class="link link-primary font-mono text-sm">
-                        {ref.label}
-                      </.link>
-                      <button
-                        type="button"
-                        phx-click="remove_source_ref"
-                        phx-value-type={ref.kind}
-                        phx-value-uuid={ref.uuid}
-                        class="text-base-content/40 hover:text-error"
-                      >
-                        <.icon name="hero-x-mark" class="w-3 h-3" />
-                      </button>
-                    </span>
-                  <% end %>
-                </div>
-              </div>
+              <%!-- Related documents (linked-from upstream + spawned downstream) --%>
+              <RelatedDocuments.related_documents
+                upstream={@source_refs}
+                downstream={@child_goods_receipt_refs}
+                upstream_label={dgettext("default", "Source documents")}
+                downstream_label={dgettext("default", "Related documents")}
+              />
               <%!-- Note edit on posted (admin only) --%>
               <%= if @posted? and @admin? do %>
                 <div class="divider my-1"></div>

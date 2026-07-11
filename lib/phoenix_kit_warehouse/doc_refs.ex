@@ -261,7 +261,7 @@ defmodule PhoenixKitWarehouse.DocRefs do
   end
 
   # ---------------------------------------------------------------------------
-  # Child document queries (for internal order detail view)
+  # Child document queries (downstream refs for document detail views)
   # ---------------------------------------------------------------------------
 
   @doc """
@@ -292,6 +292,21 @@ defmodule PhoenixKitWarehouse.DocRefs do
     |> select([i], %{uuid: i.uuid, number: i.number})
     |> repo().all()
     |> Enum.map(&build_goods_issue_ref/1)
+  end
+
+  @doc """
+  Returns all non-deleted goods receipt refs where supplier_order_uuid = the given uuid.
+  Returns a list of ref maps `[%{label, path}]`.
+  """
+  def goods_receipt_refs_for_supplier_order(supplier_order_uuid) do
+    GoodsReceipt
+    |> where(
+      [r],
+      r.supplier_order_uuid == ^supplier_order_uuid and is_nil(r.deleted_at)
+    )
+    |> select([r], %{uuid: r.uuid, number: r.number})
+    |> repo().all()
+    |> Enum.map(&build_goods_receipt_ref/1)
   end
 
   # ---------------------------------------------------------------------------

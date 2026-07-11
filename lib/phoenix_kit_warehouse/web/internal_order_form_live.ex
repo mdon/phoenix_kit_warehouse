@@ -22,7 +22,7 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
   alias PhoenixKitWarehouse.InternalOrders
   alias PhoenixKitWarehouse.StorageFolders
   alias PhoenixKitWarehouse.SupplierOrders
-  alias PhoenixKitWarehouse.Web.Components.{CommentsPanel, WarehouseBrowser}
+  alias PhoenixKitWarehouse.Web.Components.{CommentsPanel, RelatedDocuments, WarehouseBrowser}
   alias PhoenixKit.Utils.Routes
   alias PhoenixKitCatalogue.Catalogue
   alias PhoenixKitLocations.Locations
@@ -1013,61 +1013,13 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
                   </div>
                 <% end %>
               </dl>
-              <%!-- Source references (imported-from documents) --%>
-              <div class="divider my-1"></div>
-              <div class="text-sm">
-                <p class="text-base-content/60 font-medium mb-2 flex items-center gap-1">
-                  {dgettext("default", "Imported from")}
-                  <button
-                    type="button"
-                    phx-click="open_link_picker"
-                    class="btn btn-2xs btn-ghost btn-circle"
-                    title={dgettext("default", "Attach")}
-                  >
-                    <.icon name="hero-plus" class="w-3 h-3" />
-                  </button>
-                </p>
-                <div class="flex flex-wrap gap-2">
-                  <span :if={@source_refs == []} class="text-base-content/30 text-sm">—</span>
-                  <%= for ref <- @source_refs do %>
-                    <span class="inline-flex items-center gap-1 bg-base-200 rounded px-2 py-0.5">
-                      <.link navigate={ref.path} class="link link-primary font-mono text-sm">
-                        {ref.label}
-                      </.link>
-                      <button
-                        type="button"
-                        phx-click="remove_source_ref"
-                        phx-value-type={ref.kind}
-                        phx-value-uuid={ref.uuid}
-                        class="text-base-content/40 hover:text-error"
-                      >
-                        <.icon name="hero-x-mark" class="w-3 h-3" />
-                      </button>
-                    </span>
-                  <% end %>
-                </div>
-              </div>
-              <%!-- Related documents --%>
-              <%= if @child_supplier_order_refs != [] or @child_goods_issue_refs != [] do %>
-                <div class="divider my-1"></div>
-                <div class="text-sm">
-                  <p class="text-base-content/60 font-medium mb-2">
-                    {dgettext("default", "Related documents")}
-                  </p>
-                  <div class="flex flex-wrap gap-2">
-                    <%= for ref <- @child_supplier_order_refs do %>
-                      <.link navigate={ref.path} class="link link-primary font-mono text-sm">
-                        {ref.label}
-                      </.link>
-                    <% end %>
-                    <%= for ref <- @child_goods_issue_refs do %>
-                      <.link navigate={ref.path} class="link link-primary font-mono text-sm">
-                        {ref.label}
-                      </.link>
-                    <% end %>
-                  </div>
-                </div>
-              <% end %>
+              <%!-- Related documents (imported-from upstream + spawned downstream) --%>
+              <RelatedDocuments.related_documents
+                upstream={@source_refs}
+                downstream={@child_supplier_order_refs ++ @child_goods_issue_refs}
+                upstream_label={dgettext("default", "Imported from")}
+                downstream_label={dgettext("default", "Related documents")}
+              />
               <%!-- Note edit on posted doc (admin only) --%>
               <%= if @posted? and @admin? do %>
                 <div class="divider my-1"></div>

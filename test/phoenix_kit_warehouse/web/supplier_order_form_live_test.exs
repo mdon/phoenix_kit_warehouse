@@ -4,6 +4,7 @@ defmodule PhoenixKitWarehouse.Web.SupplierOrderFormLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias PhoenixKitWarehouse.GoodsReceipts
   alias PhoenixKitWarehouse.InternalOrders
   alias PhoenixKitWarehouse.SupplierOrder
   alias PhoenixKitWarehouse.SupplierOrders
@@ -483,6 +484,41 @@ defmodule PhoenixKitWarehouse.Web.SupplierOrderFormLiveTest do
       refute html =~ "#IO-#{io.number}"
       updated = SupplierOrders.get_supplier_order!(order.uuid)
       assert updated.source_refs == []
+    end
+  end
+
+  describe "downstream related documents" do
+    test "shows a link to a child goods receipt spawned from this supplier order", %{
+      conn: conn
+    } do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      {order, supplier} = create_draft()
+
+      {:ok, receipt} =
+        GoodsReceipts.create_goods_receipt(%{
+          supplier_uuid: supplier.uuid,
+          supplier_order_uuid: order.uuid,
+          location_uuid: @default_location_uuid,
+          lines: []
+        })
+
+      {:ok, _lv, html} = live(conn, edit_path(order.uuid))
+
+      assert html =~ "Related documents"
+      assert html =~ "#GR-#{receipt.number}"
+    end
+
+    test "does not show the Related documents block when there is no child goods receipt", %{
+      conn: conn
+    } do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      {order, _supplier} = create_draft()
+
+      {:ok, _lv, html} = live(conn, edit_path(order.uuid))
+
+      refute html =~ "Related documents"
     end
   end
 end
