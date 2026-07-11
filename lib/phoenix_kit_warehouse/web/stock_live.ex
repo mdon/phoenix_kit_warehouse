@@ -402,17 +402,24 @@ defmodule PhoenixKitWarehouse.Web.StockLive do
         StockLedger.stock_map()
       end
 
+    available_by_item = Deficits.available_by_item()
+    min_stock_map = MinStockSettings.min_stock_map()
+
+    # Items with a non-zero balance are the common case, but an item can
+    # have a configured minimum and yet zero (or no) Stock row at all —
+    # often the sharpest deficit of all (nothing on hand against a real
+    # minimum) — so it must still surface a row (and the "Create supplier
+    # order" action) even though it's absent from `stock_map`.
     uuids =
       stock_map
       |> Enum.filter(fn {_uuid, s} -> Decimal.gt?(s.quantity, Decimal.new(0)) end)
       |> Enum.map(&elem(&1, 0))
-
-    available_by_item = Deficits.available_by_item()
-    min_stock_map = MinStockSettings.min_stock_map()
+      |> Kernel.++(Map.keys(min_stock_map))
+      |> Enum.uniq()
 
     Catalogue.list_items_by_uuids(uuids)
     |> Enum.map(fn item ->
-      s = Map.fetch!(stock_map, item.uuid)
+      s = Map.get(stock_map, item.uuid, %{quantity: Decimal.new("0"), unit_value: nil})
       min_quantity = Map.get(min_stock_map, item.uuid, Decimal.new("0"))
       available = Map.get(available_by_item, item.uuid, Decimal.new("0"))
       below_min? = Map.has_key?(min_stock_map, item.uuid) and Decimal.lt?(available, min_quantity)

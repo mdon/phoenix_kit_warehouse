@@ -341,6 +341,27 @@ defmodule PhoenixKitWarehouse.Web.StockLiveTest do
              )
     end
 
+    test "an item with a configured minimum but no Stock row at all still shows as a deficit",
+         %{conn: conn} do
+      a = admin()
+      cat = create_catalogue!()
+      # No StockLedger.upsert_quantity call at all — this item has never had
+      # a Stock row, the sharpest possible deficit (0 available against a
+      # real minimum).
+      zero_item = create_item!(cat, "Never Stocked Widget")
+      {:ok, _} = MinStockSettings.set_min_quantity(zero_item.uuid, "5")
+
+      {:ok, lv, _html} = live(login(conn, a), path())
+      html = render_click(element(lv, ~s([phx-click="set_stock_view"][phx-value-view="flat"])))
+
+      assert html =~ "Never Stocked Widget"
+
+      assert has_element?(
+               lv,
+               ~s(button[phx-click="create_supplier_order_from_deficit"][phx-value-item_uuid="#{zero_item.uuid}"])
+             )
+    end
+
     test "clicking Create supplier order creates a draft SO from the deficit and navigates to it",
          %{conn: conn} do
       a = admin()
