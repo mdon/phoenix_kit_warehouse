@@ -135,6 +135,60 @@ defmodule PhoenixKitWarehouse.CommittedQuantitiesTest do
     end
   end
 
+  describe "compute/5 with opts[:status]" do
+    test "excludes rows whose status doesn't match, without touching the compute/4 default" do
+      source_uuid = Ecto.UUID.generate()
+      item_uuid = Ecto.UUID.generate()
+
+      _draft_issue =
+        create_issue!(%{
+          lines: [],
+          source_refs: [
+            %{
+              "type" => "internal_order",
+              "uuid" => source_uuid,
+              "lines" => %{item_uuid => Decimal.new("3")}
+            }
+          ]
+        })
+
+      posted_issue =
+        create_issue!(%{
+          lines: [],
+          source_refs: [
+            %{
+              "type" => "internal_order",
+              "uuid" => source_uuid,
+              "lines" => %{item_uuid => Decimal.new("2")}
+            }
+          ]
+        })
+
+      {:ok, _} = GoodsIssues.post_goods_issue(posted_issue, Ecto.UUID.generate())
+
+      posted_only =
+        CommittedQuantities.compute(
+          GoodsIssue,
+          ["internal_order"],
+          [source_uuid],
+          "issued_quantity",
+          status: "posted"
+        )
+
+      assert Decimal.equal?(posted_only[source_uuid][item_uuid], Decimal.new("2"))
+
+      every_status =
+        CommittedQuantities.compute(
+          GoodsIssue,
+          ["internal_order"],
+          [source_uuid],
+          "issued_quantity"
+        )
+
+      assert Decimal.equal?(every_status[source_uuid][item_uuid], Decimal.new("5"))
+    end
+  end
+
   describe "merge_ref/4" do
     test "appends a new ref with its lines breakdown when none exists yet" do
       item_uuid = Ecto.UUID.generate()

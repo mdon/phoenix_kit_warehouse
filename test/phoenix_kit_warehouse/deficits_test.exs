@@ -68,7 +68,30 @@ defmodule PhoenixKitWarehouse.DeficitsTest do
     order
   end
 
+  # Creates a goods issue referencing `io_uuid` and posts it — `lines: []`
+  # means posting moves no actual stock, so this succeeds regardless of
+  # on-hand quantity. Posted (not draft) because `reserved_by_item/0` only
+  # nets out *posted* issues (a draft hasn't decremented stock yet, so it
+  # must not shrink the reservation early — see `create_draft_issue_against_io!/2`
+  # below for the opposite case).
   defp create_issue_against_io!(io_uuid, lines_breakdown) do
+    {:ok, issue} =
+      GoodsIssues.create_goods_issue(%{
+        location_uuid: @location_uuid,
+        lines: [],
+        source_refs: [
+          %{"type" => "internal_order", "uuid" => io_uuid, "lines" => lines_breakdown}
+        ]
+      })
+
+    {:ok, posted} = GoodsIssues.post_goods_issue(issue, user_uuid())
+    posted
+  end
+
+  # Same as `create_issue_against_io!/2` but leaves the issue in draft —
+  # for asserting that an unposted goods issue does NOT net out a
+  # reservation.
+  defp create_draft_issue_against_io!(io_uuid, lines_breakdown) do
     {:ok, issue} =
       GoodsIssues.create_goods_issue(%{
         location_uuid: @location_uuid,
@@ -95,7 +118,7 @@ defmodule PhoenixKitWarehouse.DeficitsTest do
       assert Decimal.equal?(reserved[item_uuid], Decimal.new("4"))
     end
 
-    test "quantity already issued against the order reduces its reservation" do
+    test "quantity already posted-issued against the order reduces its reservation" do
       item_uuid = Ecto.UUID.generate()
       io = create_posted_io!([line(item_uuid, "4")])
       create_issue_against_io!(io.uuid, %{item_uuid => Decimal.new("1")})
@@ -103,6 +126,16 @@ defmodule PhoenixKitWarehouse.DeficitsTest do
       reserved = Deficits.reserved_by_item()
 
       assert Decimal.equal?(reserved[item_uuid], Decimal.new("3"))
+    end
+
+    test "a draft (not yet posted) goods issue does not reduce the reservation" do
+      item_uuid = Ecto.UUID.generate()
+      io = create_posted_io!([line(item_uuid, "4")])
+      create_draft_issue_against_io!(io.uuid, %{item_uuid => Decimal.new("1")})
+
+      reserved = Deficits.reserved_by_item()
+
+      assert Decimal.equal?(reserved[item_uuid], Decimal.new("4"))
     end
 
     test "draft internal orders reserve nothing" do

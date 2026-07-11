@@ -38,7 +38,10 @@ defmodule PhoenixKitWarehouse.Deficits do
   For each posted order, each line's reservation is
   `max(0, required_quantity - already_issued)`, where `already_issued` is
   how much of *that order's own* `required_quantity` has already shipped out
-  via a Goods Issue referencing it (via `CommittedQuantities.compute/4`).
+  via a **posted** Goods Issue referencing it (via
+  `CommittedQuantities.compute/5`, `status: "posted"` — a draft Goods Issue
+  hasn't decremented stock yet, so it must not shrink the reservation early;
+  doing so would let `available_by_item/0` overstate what's actually free).
   This is computed **per line, per order**, then summed by `item_uuid`
   across every order — deliberately not as a single global
   `Σrequired - Σissued` per item. The per-order clamp to zero matters:
@@ -52,7 +55,13 @@ defmodule PhoenixKitWarehouse.Deficits do
     io_uuids = Enum.map(orders, & &1.uuid)
 
     committed =
-      CommittedQuantities.compute(GoodsIssue, ["internal_order"], io_uuids, "issued_quantity")
+      CommittedQuantities.compute(
+        GoodsIssue,
+        ["internal_order"],
+        io_uuids,
+        "issued_quantity",
+        status: "posted"
+      )
 
     Enum.reduce(orders, %{}, fn io, acc ->
       already_issued_for_io = Map.get(committed, io.uuid, %{})
