@@ -10,19 +10,19 @@ defmodule PhoenixKitWarehouse.MixProject do
       version: @version,
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
-      # Elixir 1.19 mix test requires explicit filters to know which test
-      # files to load and which to ignore — without this it warns about
-      # `test/support/*.ex` not matching either filter and skips running
-      # the support modules through its loader, so `test_helper.exs` runs
-      # before they're available.
-      test_load_filters: [~r/_test\.exs$/],
-      test_ignore_filters: [~r{^test/support/}],
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      description:
-        "Warehouse module for PhoenixKit — stock, stocktakes, internal orders, supplier orders, goods receipt, goods issue.",
+      description: "Warehouse module for PhoenixKit — inventory, stock, goods receipts/issues.",
       package: package(),
-      dialyzer: [plt_add_apps: [:phoenix_kit]],
+      dialyzer: [
+        plt_add_apps: [
+          :phoenix_kit,
+          :phoenix_kit_billing,
+          :phoenix_kit_catalogue,
+          :phoenix_kit_comments,
+          :phoenix_kit_locations
+        ]
+      ],
       name: "PhoenixKitWarehouse",
       source_url: @source_url,
       docs: docs(),
@@ -32,7 +32,14 @@ defmodule PhoenixKitWarehouse.MixProject do
 
   def application do
     [
-      extra_applications: [:logger, :phoenix_kit]
+      extra_applications: [
+        :logger,
+        :phoenix_kit,
+        :phoenix_kit_billing,
+        :phoenix_kit_catalogue,
+        :phoenix_kit_comments,
+        :phoenix_kit_locations
+      ]
     ]
   end
 
@@ -43,6 +50,14 @@ defmodule PhoenixKitWarehouse.MixProject do
     [
       quality: ["format", "credo --strict", "dialyzer"],
       "quality.ci": ["format --check-formatted", "credo --strict", "dialyzer"],
+      # Schema is applied by test/test_helper.exs on every `mix test` run via
+      # PhoenixKit.Migration.ensure_current/2 plus the module's own
+      # migration_module/0 — so there is no `ecto.migrate` step here.
+      "test.setup": ["ecto.create --quiet -r PhoenixKitWarehouse.Test.Repo"],
+      "test.reset": [
+        "ecto.drop --quiet -r PhoenixKitWarehouse.Test.Repo",
+        "test.setup"
+      ],
       precommit: [
         "compile --force --warnings-as-errors",
         "deps.unlock --check-unused",
@@ -52,9 +67,11 @@ defmodule PhoenixKitWarehouse.MixProject do
     ]
   end
 
-  # phoenix_kit deps resolve from Hex by default. For cross-repo work against
-  # a local checkout, export <APP>_PATH — e.g. PHOENIX_KIT_PATH=../phoenix_kit.
-  # Unset => the published pin, so mix hex.publish is unaffected.
+  # phoenix_kit (and sibling phoenix_kit_* deps) resolve from Hex by default.
+  # For cross-repo work against a local checkout — e.g. an unpublished core
+  # change — export `<APP>_PATH` (e.g. `PHOENIX_KIT_PATH=../phoenix_kit`) and
+  # Mix swaps the Hex pin for a `path:` + `override: true` dep at resolve time.
+  # Unset => the published pin, so `mix hex.publish` and CI resolve unchanged.
   defp pk_dep(app, requirement, opts \\ []) do
     env_var = String.upcase(Atom.to_string(app)) <> "_PATH"
 
@@ -67,21 +84,16 @@ defmodule PhoenixKitWarehouse.MixProject do
 
   defp deps do
     [
-      # The warehouse DB tables ship in core migration V140, which is not yet
-      # on Hex (latest published = 1.7.179 = V139). Until a core release
-      # containing V140 is published, consumers must point at a local checkout:
-      #   PHOENIX_KIT_PATH=../phoenix_kit mix deps.get
-      # Once that release is published, raise this constraint to that version.
-      pk_dep(:phoenix_kit, "~> 1.7 and >= 1.7.165"),
-      pk_dep(:phoenix_kit_catalogue, "~> 0.10.0"),
-      pk_dep(:phoenix_kit_locations, "~> 0.2.0"),
-      # Plain library deps, not `required_modules` entries — CurrencyDisplay
-      # and `use PhoenixKitComments.Embed` are compile-time dependencies of
-      # this package's own LiveViews regardless of whether the host has the
-      # Billing/Comments *modules* enabled at runtime (see Task 4's design
-      # note). Both features self-gate behind their own `available?/0`.
+      # The warehouse DB tables ship in core migration V140, published in
+      # phoenix_kit 1.7.182 — so the module needs at least that core release.
+      pk_dep(:phoenix_kit, "~> 1.7 and >= 1.7.182"),
+      # Sibling PhoenixKit modules the warehouse UI/contexts build on:
+      # comments embeds, catalogue products, locations, and billing currency.
       pk_dep(:phoenix_kit_billing, "~> 0.5"),
+      pk_dep(:phoenix_kit_catalogue, "~> 0.10"),
       pk_dep(:phoenix_kit_comments, "~> 0.2"),
+      pk_dep(:phoenix_kit_locations, "~> 0.2"),
+      {:phoenix_live_view, "~> 1.1"},
       {:ex_doc, "~> 0.39", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
@@ -92,7 +104,7 @@ defmodule PhoenixKitWarehouse.MixProject do
     [
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files: ~w(lib guides .formatter.exs mix.exs README.md CHANGELOG.md LICENSE)
+      files: ~w(lib .formatter.exs mix.exs README.md CHANGELOG.md LICENSE)
     ]
   end
 

@@ -153,30 +153,38 @@ defmodule PhoenixKitWarehouse.Inventories do
   one always re-seeds `:lines` from that warehouse's current stock (see
   `seed_lines/2`), replacing whatever lines were there before — lines from
   the previous warehouse (manually counted or not) don't apply to a
-  different physical location. This happens unconditionally, without
-  locking (the document is still a draft; no stock has moved yet).
+  different physical location.
 
   Pass `:locale` (atom or string key) in `attrs` to localize the re-seeded
   line names; without it, re-seeded lines fall back to each catalogue item's
   default (untranslated) name — see `seed_lines/2`.
+
+  Locks the row FOR UPDATE and re-checks status == "draft" in the DB (not
+  just the in-memory struct) so a stale tab cannot overwrite a document that
+  was posted concurrently by another tab/user.
   """
-  def update_draft(%InventoryDocument{status: "draft"} = doc, attrs) do
+  def update_draft(%InventoryDocument{uuid: uuid}, attrs) do
     new_location_uuid = Map.get(attrs, :location_uuid) || Map.get(attrs, "location_uuid")
 
-    changeset = InventoryDocument.draft_changeset(doc, attrs)
+    multi =
+      uuid
+      |> lock_status_step("draft", :not_draft)
+      |> Ecto.Multi.update(:update, fn %{lock_status: locked} ->
+        changeset = InventoryDocument.draft_changeset(locked, attrs)
 
-    changeset =
-      if new_location_uuid && new_location_uuid != doc.location_uuid do
-        locale = Map.get(attrs, :locale) || Map.get(attrs, "locale")
-        Ecto.Changeset.put_change(changeset, :lines, seed_lines(locale, new_location_uuid))
-      else
-        changeset
-      end
+        if new_location_uuid && new_location_uuid != locked.location_uuid do
+          locale = Map.get(attrs, :locale) || Map.get(attrs, "locale")
+          Ecto.Changeset.put_change(changeset, :lines, seed_lines(locale, new_location_uuid))
+        else
+          changeset
+        end
+      end)
 
-    repo().update(changeset)
+    case repo().transaction(multi) do
+      {:ok, %{update: updated}} -> {:ok, updated}
+      {:error, _op, reason, _changes} -> {:error, reason}
+    end
   end
-
-  def update_draft(%InventoryDocument{}, _attrs), do: {:error, :not_draft}
 
   @doc "Returns `{:ok, doc}` or `{:error, :not_found}`."
   def get_document(uuid) do
