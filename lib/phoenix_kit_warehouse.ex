@@ -34,6 +34,7 @@ defmodule PhoenixKitWarehouse do
   alias PhoenixKitWarehouse.Web.SupplierOrderIndexLive
   alias PhoenixKitWarehouse.Web.TransferFormLive
   alias PhoenixKitWarehouse.Web.TransferIndexLive
+  alias PhoenixKitWarehouse.Web.TurnoverReportLive
 
   @version Mix.Project.config()[:version]
 
@@ -221,6 +222,20 @@ defmodule PhoenixKitWarehouse do
         permission: module_key(),
         group: :admin_main,
         live_view: {TransferIndexLive, :index}
+      },
+      %Tab{
+        id: :warehouse_turnover,
+        label: "Turnover",
+        gettext_backend: PhoenixKitWarehouse.Gettext,
+        gettext_domain: "default",
+        icon: "hero-chart-bar",
+        path: "warehouse/turnover",
+        parent: :warehouse,
+        priority: 161,
+        level: :admin,
+        permission: module_key(),
+        group: :admin_main,
+        live_view: {TurnoverReportLive, :index}
       }
     ] ++ hidden_crud_tabs()
   end

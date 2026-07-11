@@ -66,6 +66,13 @@ defmodule PhoenixKitWarehouse.Web.Components.WarehouseHeader do
         >
           {dgettext("default", "Goods Issue")}
         </.link>
+        <.link
+          role="tab"
+          navigate={PhoenixKit.Utils.Routes.path("/admin/warehouse/turnover")}
+          class={["tab", @active == :turnover && "tab-active"]}
+        >
+          {dgettext("default", "Turnover")}
+        </.link>
       </div>
     </div>
     """
