@@ -111,6 +111,14 @@ defmodule PhoenixKitWarehouse.Web.TransferFormLiveTest do
     })
   end
 
+  defp create_draft_with_two_lines(source, destination, item_a, item_b) do
+    create_draft(%{
+      source_location_uuid: source.uuid,
+      destination_location_uuid: destination.uuid,
+      lines: [sample_line(item_a, qty: "2"), sample_line(item_b, qty: "3")]
+    })
+  end
+
   # Ships a fresh draft (seeding `stock_qty` at the source first) via a
   # direct context call, bypassing the LiveView — the common starting point
   # for every `:receive`/`:cancel-from-in_transit` UI test.
@@ -303,6 +311,95 @@ defmodule PhoenixKitWarehouse.Web.TransferFormLiveTest do
 
       refute html =~ "tr-qty-form"
       refute html =~ ~s(name="transfer_quantity")
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Line index guards — a tampered/malformed phx-value-index (or hidden
+  # "index" form field) must neither crash the LiveView nor silently touch
+  # the wrong line. `render_click`/`render_change`'s explicit value map
+  # overrides the element's real DOM value, simulating a tampered client.
+  # ---------------------------------------------------------------------------
+
+  describe "line index guards" do
+    test "remove_line ignores a non-numeric index instead of crashing", %{conn: conn} do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      [loc_a, loc_b] = setup_warehouses!(["TR Idx A", "TR Idx B"])
+      item_a = Ecto.UUID.generate()
+      item_b = Ecto.UUID.generate()
+      transfer = create_draft_with_two_lines(loc_a, loc_b, item_a, item_b)
+
+      {:ok, lv, _html} = live(conn, items_path(transfer.uuid))
+
+      lv
+      |> element("button[phx-click='remove_line'][phx-value-index='0']")
+      |> render_click(%{"index" => "not-a-number"})
+
+      {:ok, updated} = Transfers.get_transfer(transfer.uuid)
+      assert length(updated.lines) == 2
+    end
+
+    test "remove_line ignores a negative index instead of deleting the last line", %{
+      conn: conn
+    } do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      [loc_a, loc_b] = setup_warehouses!(["TR Idx C", "TR Idx D"])
+      item_a = Ecto.UUID.generate()
+      item_b = Ecto.UUID.generate()
+      transfer = create_draft_with_two_lines(loc_a, loc_b, item_a, item_b)
+
+      {:ok, lv, _html} = live(conn, items_path(transfer.uuid))
+
+      # Real DOM index is 0 (first line); a negative index is otherwise a
+      # valid integer (String.to_integer/1 wouldn't reject it) but
+      # List.delete_at/2 treats it as "from the end", which would silently
+      # delete item_b's line instead of item_a's.
+      lv
+      |> element("button[phx-click='remove_line'][phx-value-index='0']")
+      |> render_click(%{"index" => "-1"})
+
+      {:ok, updated} = Transfers.get_transfer(transfer.uuid)
+      assert Enum.map(updated.lines, & &1["item_uuid"]) == [item_a, item_b]
+    end
+
+    test "set_transfer_qty ignores a negative index instead of updating the wrong line", %{
+      conn: conn
+    } do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      [loc_a, loc_b] = setup_warehouses!(["TR Idx E", "TR Idx F"])
+      item_a = Ecto.UUID.generate()
+      item_b = Ecto.UUID.generate()
+      transfer = create_draft_with_two_lines(loc_a, loc_b, item_a, item_b)
+
+      {:ok, lv, _html} = live(conn, items_path(transfer.uuid))
+
+      lv
+      |> element("#tr-qty-form-0")
+      |> render_change(%{"index" => "-1", "transfer_quantity" => "99"})
+
+      {:ok, updated} = Transfers.get_transfer(transfer.uuid)
+      refute Enum.any?(updated.lines, &(&1["transfer_quantity"] == "99"))
+    end
+
+    test "set_transfer_qty ignores a non-numeric index instead of crashing", %{conn: conn} do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      [loc_a, loc_b] = setup_warehouses!(["TR Idx G", "TR Idx H"])
+      item_a = Ecto.UUID.generate()
+      item_b = Ecto.UUID.generate()
+      transfer = create_draft_with_two_lines(loc_a, loc_b, item_a, item_b)
+
+      {:ok, lv, _html} = live(conn, items_path(transfer.uuid))
+
+      lv
+      |> element("#tr-qty-form-0")
+      |> render_change(%{"index" => "not-a-number", "transfer_quantity" => "99"})
+
+      {:ok, updated} = Transfers.get_transfer(transfer.uuid)
+      refute Enum.any?(updated.lines, &(&1["transfer_quantity"] == "99"))
     end
   end
 

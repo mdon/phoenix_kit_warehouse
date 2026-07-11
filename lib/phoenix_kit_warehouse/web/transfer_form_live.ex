@@ -486,23 +486,27 @@ defmodule PhoenixKitWarehouse.Web.TransferFormLive do
 
   @impl true
   def handle_event("remove_line", %{"index" => index_str}, socket) do
-    index = String.to_integer(index_str)
-    lines = List.delete_at(socket.assigns.lines, index)
-    {:noreply, assign(socket, :lines, lines)}
+    lines = socket.assigns.lines
+
+    case parse_line_index(index_str, lines) do
+      {:ok, index} -> {:noreply, assign(socket, :lines, List.delete_at(lines, index))}
+      :error -> {:noreply, socket}
+    end
   end
 
   @impl true
   def handle_event("set_transfer_qty", params, socket) do
-    index = String.to_integer(params["index"])
+    lines = socket.assigns.lines
     raw = params["transfer_quantity"] || "0"
 
-    lines =
-      socket.assigns.lines
-      |> List.update_at(index, fn line ->
-        Map.put(line, "transfer_quantity", raw)
-      end)
+    case parse_line_index(params["index"], lines) do
+      {:ok, index} ->
+        updated = List.update_at(lines, index, &Map.put(&1, "transfer_quantity", raw))
+        {:noreply, assign(socket, :lines, updated)}
 
-    {:noreply, assign(socket, :lines, lines)}
+      :error ->
+        {:noreply, socket}
+    end
   end
 
   @impl true
@@ -1489,6 +1493,23 @@ defmodule PhoenixKitWarehouse.Web.TransferFormLive do
     |> Enum.filter(& &1)
     |> MapSet.new()
   end
+
+  # Parses a client-supplied line index (`phx-value-index` / a hidden form
+  # field), guarding against both a malformed value (`String.to_integer/1`
+  # would raise `ArgumentError` on a non-numeric string) and an out-of-range
+  # one — `List.delete_at/2`/`List.update_at/3` silently accept negative
+  # indices (counting from the end), so an unchecked negative index would
+  # quietly mutate the wrong line instead of failing loudly.
+  defp parse_line_index(index_str, lines) when is_binary(index_str) do
+    with {index, ""} <- Integer.parse(index_str),
+         true <- index >= 0 and index < length(lines) do
+      {:ok, index}
+    else
+      _ -> :error
+    end
+  end
+
+  defp parse_line_index(_index_str, _lines), do: :error
 
   defp update_location(socket, field, raw_uuid) do
     uuid = blank_to_nil(raw_uuid)
