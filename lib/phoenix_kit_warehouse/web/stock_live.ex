@@ -8,6 +8,14 @@ defmodule PhoenixKitWarehouse.Web.StockLive do
   - **Flat**: full table-parity view backed by `Andi.Warehouse.StockColumnConfig`
     — global search, per-column filtering, sorting, and configurable columns.
 
+  Both views share a **warehouse scope** selector, rendered next to the
+  Grouped/Flat toggle: "All warehouses" (the `:warehouse_scope` assign is
+  `nil`, totals aggregate every location via `StockLedger.stock_map/0`) or one
+  specific warehouse (`:warehouse_scope` holds its `location_uuid`, totals
+  come from `StockLedger.stock_map_for_location/1`). Persisted per-user via
+  `ViewConfigs`, same as `stock_view`. Hidden entirely when no warehouse
+  LocationType is configured (`StockLedger.list_warehouses/0` returns `nil`).
+
   Admin-chrome pattern: self-wrapping render with `LayoutWrapper.app_layout`
   so the page title lands in the global admin header (see `:self_wrapped_layout`
   on_mount). Navigation via `PhoenixKit.Utils.Routes.path/1`.
@@ -51,22 +59,27 @@ defmodule PhoenixKitWarehouse.Web.StockLive do
     current_user = scope && PhoenixKit.Users.Auth.Scope.user(scope)
     user_uuid = current_user && current_user.uuid
 
-    stock_view =
-      (is_binary(user_uuid) &&
-         Map.get(ViewConfigs.get_view_config(user_uuid, "warehouse_stock"), "stock_view")) ||
-        "grouped"
+    view_config =
+      if is_binary(user_uuid),
+        do: ViewConfigs.get_view_config(user_uuid, "warehouse_stock"),
+        else: %{}
+
+    stock_view = Map.get(view_config, "stock_view") || "grouped"
+    warehouse_scope = view_config |> Map.get("warehouse_scope") |> normalize_warehouse_scope()
 
     socket =
       socket
       |> assign(:page_title, dgettext("default", "Warehouse"))
       |> assign(:locale, locale)
-      |> assign(:stock_items, build_stock_items())
+      |> assign(:warehouses, StockLedger.list_warehouses())
+      |> assign(:warehouse_scope, warehouse_scope)
       |> assign(:stock_view, stock_view)
       |> assign(:search, "")
       |> assign(:sort_by, "item")
       |> assign(:sort_dir, :asc)
       |> assign(:current_user_uuid, user_uuid)
       |> PhoenixKitWarehouse.Web.ColumnManagement.assign_column_state(StockColumnConfig)
+      |> assign_stock_items()
 
     {:ok, assign_stock_rows(socket)}
   end
@@ -97,6 +110,26 @@ defmodule PhoenixKitWarehouse.Web.StockLive do
     end
 
     {:noreply, assign(socket, :stock_view, v)}
+  end
+
+  # Scopes both views (Grouped's :stock_items and Flat's :stock_rows) to one
+  # warehouse, or back to every warehouse summed when `v` is "" (the "All
+  # warehouses" option). Persisted per-user, same as set_stock_view above.
+  @impl true
+  def handle_event("set_warehouse_scope", %{"location_uuid" => v}, socket) do
+    uuid = socket.assigns.current_user_uuid
+
+    if is_binary(uuid) do
+      ViewConfigs.merge_view_config(uuid, "warehouse_stock", %{"warehouse_scope" => v})
+    end
+
+    socket =
+      socket
+      |> assign(:warehouse_scope, normalize_warehouse_scope(v))
+      |> assign_stock_items()
+      |> assign_stock_rows()
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -136,7 +169,7 @@ defmodule PhoenixKitWarehouse.Web.StockLive do
     locale = socket.assigns.locale
 
     rows =
-      build_stock_items()
+      build_stock_items(socket.assigns.warehouse_scope)
       |> enrich_stock(locale)
       |> apply_global_search(socket.assigns.search)
       |> apply_column_filters(socket.assigns.active_filters, socket.assigns.filter_values)
@@ -144,6 +177,17 @@ defmodule PhoenixKitWarehouse.Web.StockLive do
 
     assign(socket, :stock_rows, rows)
   end
+
+  # Recomputes :stock_items (the Grouped view's source list) for the current
+  # :warehouse_scope. Called from mount and from set_warehouse_scope so both
+  # views stay in sync regardless of which one is currently visible.
+  defp assign_stock_items(socket) do
+    assign(socket, :stock_items, build_stock_items(socket.assigns.warehouse_scope))
+  end
+
+  # "" (the "All warehouses" <option> value) and nil both mean "no scope".
+  defp normalize_warehouse_scope(v) when v in [nil, ""], do: nil
+  defp normalize_warehouse_scope(v), do: v
 
   defp enrich_stock(items, locale) do
     Enum.map(items, fn %{item: item, quantity: q, unit_value: uv} ->
@@ -229,14 +273,27 @@ defmodule PhoenixKitWarehouse.Web.StockLive do
     |> Enum.filter(&(&1 && &1.sortable?))
   end
 
+  # `list_warehouses/0` returns nil when the warehouse LocationType isn't
+  # configured yet, or [] when configured but empty — neither is selectable.
+  defp warehouse_options?(nil), do: false
+  defp warehouse_options?([]), do: false
+  defp warehouse_options?(_), do: true
+
   # ---------------------------------------------------------------------------
   # Private helpers — stock items (used by both views)
   # ---------------------------------------------------------------------------
 
   # Items with a non-zero balance, preloaded with catalogue/category. Used as
   # source for both the grouped view (stock_items) and the flat pipeline.
-  defp build_stock_items do
-    stock_map = StockLedger.stock_map()
+  # `warehouse_scope` nil sums every warehouse (stock_map/0); a location_uuid
+  # scopes to that single warehouse (stock_map_for_location/1).
+  defp build_stock_items(warehouse_scope) do
+    stock_map =
+      if warehouse_scope do
+        StockLedger.stock_map_for_location(warehouse_scope)
+      else
+        StockLedger.stock_map()
+      end
 
     uuids =
       stock_map
@@ -276,8 +333,8 @@ defmodule PhoenixKitWarehouse.Web.StockLive do
       <div class="flex flex-col mx-auto max-w-none sm:px-4 py-2 sm:py-6 gap-2">
         <WarehouseHeader.warehouse_header active={:stock} />
 
-        <%!-- Grouped / Flat toggle --%>
-        <div class="flex items-center gap-2 mb-1">
+        <%!-- Grouped / Flat toggle + warehouse scope --%>
+        <div class="flex flex-wrap items-center gap-2 mb-1">
           <div class="join">
             <button
               type="button"
@@ -302,6 +359,21 @@ defmodule PhoenixKitWarehouse.Web.StockLive do
               {dgettext("default", "Flat")}
             </button>
           </div>
+
+          <%= if warehouse_options?(@warehouses) do %>
+            <form id="stock-warehouse-scope" phx-change="set_warehouse_scope" class="contents">
+              <select name="location_uuid" class="select select-sm select-bordered">
+                <option value="" selected={@warehouse_scope == nil}>
+                  {dgettext("default", "All warehouses")}
+                </option>
+                <%= for warehouse <- @warehouses do %>
+                  <option value={warehouse.uuid} selected={@warehouse_scope == warehouse.uuid}>
+                    {warehouse.name}
+                  </option>
+                <% end %>
+              </select>
+            </form>
+          <% end %>
         </div>
 
         <%= if @stock_view == "flat" do %>
