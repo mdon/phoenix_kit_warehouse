@@ -417,6 +417,32 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueFormLiveTest do
       assert length(updated.lines) == 1
     end
 
+    test "manually attaching a customer order records its SourceKinds :kind, not a nil type", %{
+      conn: conn
+    } do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      {issue, _item_uuid} = create_draft_with_lines()
+      customer_order = PhoenixKitWarehouse.Test.Fixtures.insert_order!()
+
+      {:ok, lv, _html} = live(conn, edit_path(issue.uuid))
+
+      lv
+      |> element("button[phx-click='open_link_picker'][phx-value-kind='order']")
+      |> render_click()
+
+      lv
+      |> element(
+        "input[phx-click='source_picker_toggle'][phx-value-uuid='#{customer_order.uuid}']"
+      )
+      |> render_click()
+
+      lv |> element("button[phx-click='source_picker_confirm']") |> render_click()
+
+      updated = GoodsIssues.get_goods_issue!(issue.uuid)
+      assert %{"type" => "order", "uuid" => customer_order.uuid} in updated.source_refs
+    end
+
     test "removing an attached reference detaches it", %{conn: conn} do
       admin = create_admin_user()
       conn = log_in_admin(conn, admin)

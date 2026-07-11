@@ -388,7 +388,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
         {List.delete(selected, uuid), Map.delete(meta, uuid)}
       else
         candidate = Enum.find(socket.assigns.source_picker_candidates, &(&1.uuid == uuid))
-        type = candidate && Map.get(candidate, :type)
+        type = candidate && Map.get(candidate, :kind)
         {selected ++ [uuid], Map.put(meta, uuid, type)}
       end
 
@@ -409,7 +409,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
       if all_selected? do
         {[], %{}}
       else
-        meta = Map.new(candidates, &{&1.uuid, Map.get(&1, :type)})
+        meta = Map.new(candidates, &{&1.uuid, Map.get(&1, :kind)})
         {Enum.uniq(selected ++ Enum.map(candidates, & &1.uuid)), meta}
       end
 
@@ -627,7 +627,11 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
     end
   end
 
-  defp link_ref_type(:link_order, meta, uuid), do: Map.get(meta, uuid, "order")
+  # `Map.get(meta, uuid, "order")` alone isn't enough insurance: the key can
+  # be present but mapped to `nil` (e.g. an unresolved candidate) rather
+  # than absent, and `Map.get/3`'s default only kicks in when the key is
+  # missing — so `|| "order"` catches that case too.
+  defp link_ref_type(:link_order, meta, uuid), do: Map.get(meta, uuid) || "order"
   defp link_ref_type(:link_internal_order, _meta, _uuid), do: "internal_order"
   defp link_ref_type(:link_supplier_order, _meta, _uuid), do: "supplier_order"
 
