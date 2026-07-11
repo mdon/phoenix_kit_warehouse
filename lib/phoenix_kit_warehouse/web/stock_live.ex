@@ -77,7 +77,7 @@ defmodule PhoenixKitWarehouse.Web.StockLive do
       |> assign(:locale, locale)
       |> assign(:stock_items, [])
       |> assign(:stock_view, "grouped")
-      |> assign(:warehouses, StockLedger.list_warehouses())
+      |> assign(:warehouses, [])
       |> assign(:warehouse_scope, nil)
       |> assign(:search, "")
       |> assign(:sort_by, "item")
@@ -106,6 +106,7 @@ defmodule PhoenixKitWarehouse.Web.StockLive do
 
     socket =
       socket
+      |> assign(:warehouses, StockLedger.list_warehouses())
       |> assign(:warehouse_scope, warehouse_scope)
       |> assign(:stock_view, stock_view)
       |> assign(:stock_items, items)
