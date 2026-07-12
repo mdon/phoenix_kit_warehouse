@@ -2,11 +2,11 @@ defmodule PhoenixKitWarehouse.MinStockSettings do
   @moduledoc """
   Context for the per-item minimum stock threshold (§5, deficit tracking).
 
-  Backed by `phoenix_kit_warehouse_min_stock` (introduced in
-  `PhoenixKitWarehouse.Migrations.Postgres.V02` / T16), a small side table
-  with at most one row per `item_uuid` (enforced by a unique index). Items
-  without a row — or whose row has `min_quantity == 0` — are treated as
-  having no configured minimum: `min_stock_map/0` only returns rows where
+  Backed by `phoenix_kit_warehouse_min_stock` (introduced in core PhoenixKit
+  migration V143), a small side table with at most one row per `item_uuid`
+  (enforced by a unique index). Items without a row — or whose row has
+  `min_quantity == 0` — are treated as having no configured minimum:
+  `min_stock_map/0` only returns rows where
   `min_quantity > 0`, since a zero threshold isn't meaningfully different
   from "not configured" for deficit purposes (see the upcoming
   `PhoenixKitWarehouse.Deficits`).

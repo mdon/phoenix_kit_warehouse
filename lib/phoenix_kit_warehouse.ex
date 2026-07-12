@@ -100,9 +100,6 @@ defmodule PhoenixKitWarehouse do
   def version, do: @version
 
   @impl PhoenixKit.Module
-  def migration_module, do: PhoenixKitWarehouse.Migrations.Postgres
-
-  @impl PhoenixKit.Module
   def required_modules, do: ["catalogue", "locations"]
 
   @impl PhoenixKit.Module
