@@ -2,6 +2,57 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.0 - 2026-07-13
+
+Wave 1: multi-warehouse, transfers, deficit control, turnover.
+
+### Added
+
+- **Multi-warehouse stock scope**: per-location stock balances
+  (`StockLedger.stock_map_for_location/1`, `get_quantity/2`), a warehouse
+  selector on goods receipt/issue/inventory drafts, and a "per warehouse /
+  all warehouses" scope toggle on the Stock page (persisted per user).
+- **Transfers**: new document type with a draft → in_transit → done
+  lifecycle, atomic ship/receive stock postings, and cancellation (draft:
+  void; in_transit: reverses the ship posting back to the source
+  warehouse).
+- **Deficit control**: per-item minimum stock, an available-quantity
+  calculation (on-hand minus posted reserves — draft documents don't
+  reserve), zero-stock deficits surfaced even with no `Stock` row, and a
+  "create supplier order" action from a deficit row.
+- **Turnover report**: aggregated in/out/balance per item over a date
+  range, optionally scoped to one warehouse; `balance` is documented as
+  current on-hand, not a historical balance as of the end date.
+- **Related documents**: a shared upstream/downstream linked-documents
+  list component on Internal Order / Supplier Order cards.
+- `Transfer`/`MinStock` tables now ship in core `phoenix_kit`'s migration
+  V143+ instead of this package's own migrator (which is retired); this
+  package defines schemas only and owns no DDL.
+
+### Fixed
+
+- `StockLedger.stock_map/0`, `Deficits`, `Inventories`, `GoodsReceipts`,
+  `GoodsIssues` previous-quantity audit snapshots, and the `SourceKinds`
+  link picker in the goods receipt/issue forms were all made
+  warehouse-aware or corrected for multi-location stock (see
+  [`dev_docs/pull_requests/2026/3-wave-1-multi-warehouse/CLAUDE_REVIEW.md`](dev_docs/pull_requests/2026/3-wave-1-multi-warehouse/CLAUDE_REVIEW.md)
+  for the full list, plus this release's own post-merge fixes below).
+- Post-merge review fixes: `SupplierOrders.generate_from_internal_order/2`
+  and `import_from_internal_orders/3` now read on-hand stock from the
+  internal order's own warehouse instead of an arbitrary one;
+  `TransferFormLive`'s quantity input is now clamped non-negative
+  (a negative value could otherwise inflate source-warehouse stock and
+  permanently stall the transfer); `TurnoverReportLive` no longer queries
+  the database in `mount/3` (was doubling the report query on every page
+  load); `Transfer`/`MinStock` schemas now use `PhoenixKit.SchemaPrefix`,
+  matching every other table-backed schema in this package.
+
+### Requires
+
+- `phoenix_kit >= 1.7.189` — `Transfer`/`MinStock` tables ship in core
+  migration V143 (subsequently renumbered upstream; any published core
+  release ≥ 1.7.189 satisfies this pin).
+
 ## 0.1.0 - 2026-07-10
 
 Initial release.
