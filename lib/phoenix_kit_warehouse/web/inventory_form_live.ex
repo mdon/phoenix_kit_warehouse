@@ -50,8 +50,12 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLive do
       |> assign(:locale, locale)
       |> assign(:current_user, current_user)
       |> assign(:admin?, admin?)
+      |> assign(:warehouses, StockLedger.list_warehouses())
       |> assign(:stock_map, %{})
       |> assign(:show_add_picker_modal, false)
+      |> assign(:show_location_confirm, false)
+      |> assign(:pending_location_uuid, nil)
+      |> assign(:pending_location_name, nil)
       # Will be set in handle_params
       |> assign(:doc, nil)
       |> assign(:lines, [])
@@ -178,9 +182,11 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLive do
     scope = socket.assigns[:phoenix_kit_current_scope]
     current_user = scope && PhoenixKit.Users.Auth.Scope.user(scope)
     user_uuid = current_user && current_user.uuid
+    location_uuid = StockLedger.default_location_uuid()
 
     attrs = %{
-      lines: Inventories.seed_lines(locale),
+      lines: Inventories.seed_lines(locale, location_uuid),
+      location_uuid: location_uuid,
       created_by_uuid: user_uuid
     }
 
@@ -228,6 +234,7 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLive do
       |> assign(:doc, doc)
       |> assign(:selectable_users, selectable_users)
       |> assign(:location_name, resolve_location_name(doc.location_uuid))
+      |> assign(:stock_map, StockLedger.stock_map_for_location(doc.location_uuid))
       |> assign(:page_title, dgettext("default", "Stocktake #%{n}", n: doc.number))
 
     # Initialise the edit buffer only when first opening this document. Preserves
@@ -519,6 +526,60 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLive do
   @impl true
   def handle_event("set_note", %{"note" => note}, socket) do
     {:noreply, assign(socket, :note, note)}
+  end
+
+  # ---------------------------------------------------------------------------
+  # Warehouse (location) selector — draft only.
+  # Switching warehouse re-seeds the count sheet (T2), so the change is gated
+  # behind a confirmation modal rather than applied immediately.
+  # ---------------------------------------------------------------------------
+
+  @impl true
+  def handle_event("set_location", %{"location_uuid" => uuid}, socket) do
+    doc = socket.assigns.doc
+
+    cond do
+      is_nil(doc) or doc.status != "draft" ->
+        {:noreply,
+         put_flash(socket, :error, dgettext("default", "Cannot modify: document is not a draft"))}
+
+      uuid == doc.location_uuid ->
+        {:noreply, socket}
+
+      true ->
+        {:noreply,
+         socket
+         |> assign(:pending_location_uuid, uuid)
+         |> assign(:pending_location_name, resolve_location_name(uuid))
+         |> assign(:show_location_confirm, true)}
+    end
+  end
+
+  def handle_event("confirm_location_change", _params, socket) do
+    locale = socket.assigns.locale
+
+    case Inventories.update_draft(socket.assigns.doc, %{
+           location_uuid: socket.assigns.pending_location_uuid,
+           locale: locale
+         }) do
+      {:ok, updated_doc} ->
+        {:noreply,
+         socket
+         |> load_doc_into_socket(updated_doc.uuid, locale)
+         |> assign_edit_buffer(updated_doc, locale)
+         |> reset_location_confirm()
+         |> put_flash(:info, dgettext("default", "Warehouse changed — count sheet re-seeded"))}
+
+      {:error, _changeset} ->
+        {:noreply,
+         socket
+         |> reset_location_confirm()
+         |> put_flash(:error, dgettext("default", "Failed to change warehouse"))}
+    end
+  end
+
+  def handle_event("cancel_location_change", _params, socket) do
+    {:noreply, reset_location_confirm(socket)}
   end
 
   # ---------------------------------------------------------------------------
@@ -955,10 +1016,25 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLive do
                     {dgettext("default", "Warehouse (location)")}
                   </dt>
                   <dd class="mt-0.5">
-                    <%= if @location_name do %>
-                      {@location_name}
+                    <%= if !@posted? and warehouse_options?(@warehouses) do %>
+                      <form phx-change="set_location" phx-submit="set_location">
+                        <select name="location_uuid" class="select select-sm select-bordered">
+                          <%= for warehouse <- @warehouses do %>
+                            <option
+                              value={warehouse.uuid}
+                              selected={@doc.location_uuid == warehouse.uuid}
+                            >
+                              {warehouse.name}
+                            </option>
+                          <% end %>
+                        </select>
+                      </form>
                     <% else %>
-                      <span class="text-base-content/40">{dgettext("default", "— not set —")}</span>
+                      <%= if @location_name do %>
+                        {@location_name}
+                      <% else %>
+                        <span class="text-base-content/40">{dgettext("default", "— not set —")}</span>
+                      <% end %>
                     <% end %>
                   </dd>
                 </div>
@@ -1166,6 +1242,25 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLive do
           </div>
         </div>
       <% end %>
+
+      <%!-- Warehouse-change confirmation (re-seeds the count sheet) --%>
+      <.modal show={@show_location_confirm} on_close="cancel_location_change" max_width="md">
+        <:title>{dgettext("default", "Change warehouse?")}</:title>
+        <p class="py-2 text-sm text-base-content/70">
+          {dgettext(
+            "default",
+            "Switching the warehouse resets the counted quantities to the current stock of the new warehouse. Continue?"
+          )}
+        </p>
+        <:actions>
+          <button type="button" phx-click="cancel_location_change" class="btn btn-sm btn-ghost">
+            {dgettext("default", "Cancel")}
+          </button>
+          <button type="button" phx-click="confirm_location_change" class="btn btn-sm btn-primary">
+            {dgettext("default", "Change warehouse")}
+          </button>
+        </:actions>
+      </.modal>
     </div>
     """
   end
@@ -1348,6 +1443,13 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLive do
     Map.put(acc, key, %{from: to_string(from), to: to_string(to)})
   end
 
+  defp reset_location_confirm(socket) do
+    socket
+    |> assign(:show_location_confirm, false)
+    |> assign(:pending_location_uuid, nil)
+    |> assign(:pending_location_name, nil)
+  end
+
   defp maybe_add_responsibility_change(acc, _key, same, same), do: acc
 
   defp maybe_add_responsibility_change(acc, key, from, to) do
@@ -1373,6 +1475,10 @@ defmodule PhoenixKitWarehouse.Web.InventoryFormLive do
     zero = Decimal.new("0")
     if Decimal.compare(d, zero) == :lt, do: zero, else: d
   end
+
+  defp warehouse_options?(nil), do: false
+  defp warehouse_options?([]), do: false
+  defp warehouse_options?(_), do: true
 
   # Returns user email for display; falls back to uuid fragment when not found.
   defp user_display_name(nil, _users), do: dgettext("default", "— not set —")

@@ -9,13 +9,25 @@ package that implements the `PhoenixKit.Module` behaviour and is
 auto-discovered by a host Phoenix app at startup. It has no endpoint,
 router, or Ecto repo of its own; it borrows the host's via `phoenix_kit`.
 
-**Status:** scaffold. The project configuration (`mix.exs`, `config/`,
-formatter, credo, CI aliases) is in place; the module code — schemas,
-contexts, admin UI, and migrations — is not implemented yet.
+The module is fully implemented (wave 1 scope, ~60 source files, 8 Ecto
+schemas). Features:
 
-Planned scope: inventory / stock (warehouses, locations, on-hand
-quantities) and goods receipts / issues, integrating with the Manufacturing
-module and other PhoenixKit modules.
+- **Multi-warehouse stock scope** — stock balances per item per location,
+  configurable default warehouse, warehouse location type.
+- **Transfers** — inter-warehouse transfers with ship / receive workflow;
+  cancel issues a reverse posting to restore source stock.
+- **Deficit control** — min-stock settings per item/location; deficit
+  dashboard surfaces items below threshold.
+- **Turnover report** — aggregated goods movement over a date range.
+- **Stocktakes (inventory documents)** — counted-quantity reconciliation.
+- **Internal orders** and **supplier orders** — request and procurement
+  documents linked to goods receipts.
+- **Goods receipts** and **goods issues** — posting documents that move
+  stock in and out.
+
+Hard runtime dependencies: `phoenix_kit`, `phoenix_kit_billing`,
+`phoenix_kit_catalogue`, `phoenix_kit_locations`. Comments integration via
+`phoenix_kit_comments` is optional (guarded at call sites).
 
 ## Common Commands
 
@@ -59,8 +71,8 @@ before. Implemented via `pk_dep/3` in `mix.exs` — never hand-edit a
    compile time from each tab's `live_view:` field.
 4. Enable state is the `warehouse_enabled` boolean setting
    (`PhoenixKit.Settings`); permissions come from `permission_metadata/0`.
-5. Tables are applied by `mix phoenix_kit.update`, which discovers this
-   module's `migration_module/0` and runs it.
+5. Tables are created by PhoenixKit core (V143); this module ships no
+   migrations of its own.
 
 ### Key conventions
 
@@ -88,13 +100,37 @@ modules — cf. `phoenix_kit_manufacturing`, `phoenix_kit_legal`):
 
 ### Database & migrations
 
-Ship the module's **own** tables through `migration_module/0` — the
-standalone-package pattern (cf. `phoenix_kit_legal`), *not* the
-core-migration pattern used by first-party modules like
-`phoenix_kit_locations`. To add/alter tables: bump `@current_version`,
-extend `up/1` + `down/1` (idempotent, prefix-aware SQL), and update
-`migrated_version_runtime/1` if the probe table changes. Hosts apply changes
-with `mix phoenix_kit.update`.
+This module ships **no production migrations** — all 8 runtime tables are
+created by the parent
+[phoenix_kit](https://github.com/BeamLabEU/phoenix_kit) core migrations:
+
+- **V140** creates 6 tables: `phoenix_kit_warehouse_stock`,
+  `phoenix_kit_warehouse_goods_receipts`, `phoenix_kit_warehouse_goods_issues`,
+  `phoenix_kit_warehouse_internal_orders`,
+  `phoenix_kit_warehouse_supplier_orders`, and
+  `phoenix_kit_warehouse_inventory_documents`.
+- **V143** creates 2 additional tables:
+  `phoenix_kit_warehouse_transfers` and `phoenix_kit_warehouse_min_stock`.
+
+This module only defines Ecto schemas that map to those tables. The
+published `0.1.0` shipped no migrations at all (no `migrations/` directory),
+so there is no upgrade path to account for — V140 and V143 are both
+fresh-install-only DDL for this module's tables. For the full column/index
+list see the respective migration moduledocs in core
+(`lib/phoenix_kit/migrations/postgres/v140.ex` and `v143.ex`).
+
+The test suite builds its schema by running core's versioned migrations
+directly via `PhoenixKit.Migration.ensure_current/2` in
+`test/test_helper.exs` — no module-owned DDL. **Until phoenix_kit core
+publishes a Hex release containing V143**, that means integration tests
+need a local core checkout with V143 on it, not just the Hex pin:
+
+```bash
+PHOENIX_KIT_PATH=../phoenix_kit mix test
+```
+
+(see "Local cross-repo development" above; point it at a checkout of
+core's `core-v143-module-tables` branch, or its merged successor).
 
 ## Testing
 
@@ -105,8 +141,9 @@ pattern):
   run — no DB needed.
 - **Integration** tests are tagged `:integration` (via `DataCase` /
   `LiveCase`) and auto-excluded when PostgreSQL is unavailable. The helper
-  applies core migrations via `PhoenixKit.Migration.ensure_current/2` and
-  this module's `migration_module/0`, then uses `Ecto.Adapters.SQL.Sandbox`.
+  applies core migrations via `PhoenixKit.Migration.ensure_current/2` (the
+  module ships no migrations of its own — see "Database & migrations"
+  above), then uses `Ecto.Adapters.SQL.Sandbox`.
 
 ## Versioning & Releases
 

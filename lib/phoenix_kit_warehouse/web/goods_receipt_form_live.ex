@@ -66,6 +66,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
       |> assign(:source_picker_selected_uuids, [])
       |> assign(:source_picker_selected_meta, %{})
       |> assign(:source_picker_query, "")
+      |> assign(:warehouses, StockLedger.list_warehouses())
       |> assign(:page_title, dgettext("default", "Goods Receipt"))
       |> PhoenixKitWeb.Components.MediaBrowser.setup_uploads()
 
@@ -387,7 +388,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
         {List.delete(selected, uuid), Map.delete(meta, uuid)}
       else
         candidate = Enum.find(socket.assigns.source_picker_candidates, &(&1.uuid == uuid))
-        type = candidate && Map.get(candidate, :type)
+        type = candidate && Map.get(candidate, :kind)
         {selected ++ [uuid], Map.put(meta, uuid, type)}
       end
 
@@ -408,7 +409,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
       if all_selected? do
         {[], %{}}
       else
-        meta = Map.new(candidates, &{&1.uuid, Map.get(&1, :type)})
+        meta = Map.new(candidates, &{&1.uuid, Map.get(&1, :kind)})
         {Enum.uniq(selected ++ Enum.map(candidates, & &1.uuid)), meta}
       end
 
@@ -515,6 +516,32 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
   end
 
   # ---------------------------------------------------------------------------
+  # Warehouse (location) selector — draft only
+  # ---------------------------------------------------------------------------
+
+  @impl true
+  def handle_event("set_location", %{"location_uuid" => uuid}, socket) do
+    case socket.assigns.receipt do
+      %PhoenixKitWarehouse.GoodsReceipt{status: "draft"} = receipt ->
+        with {:ok, updated} <- GoodsReceipts.update_draft(receipt, %{location_uuid: uuid}) do
+          {:noreply,
+           socket
+           |> assign(:receipt, updated)
+           |> assign(:location_name, resolve_location_name(updated.location_uuid))
+           |> put_flash(:info, dgettext("default", "Warehouse changed"))}
+        else
+          {:error, _changeset} ->
+            {:noreply,
+             put_flash(socket, :error, dgettext("default", "Failed to change warehouse"))}
+        end
+
+      _ ->
+        {:noreply,
+         put_flash(socket, :error, dgettext("default", "Cannot modify: document is not a draft"))}
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # Save draft
   # ---------------------------------------------------------------------------
 
@@ -600,7 +627,11 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
     end
   end
 
-  defp link_ref_type(:link_order, meta, uuid), do: Map.get(meta, uuid, "order")
+  # `Map.get(meta, uuid, "order")` alone isn't enough insurance: the key can
+  # be present but mapped to `nil` (e.g. an unresolved candidate) rather
+  # than absent, and `Map.get/3`'s default only kicks in when the key is
+  # missing — so `|| "order"` catches that case too.
+  defp link_ref_type(:link_order, meta, uuid), do: Map.get(meta, uuid) || "order"
   defp link_ref_type(:link_internal_order, _meta, _uuid), do: "internal_order"
   defp link_ref_type(:link_supplier_order, _meta, _uuid), do: "supplier_order"
 
@@ -782,10 +813,25 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
                     {dgettext("default", "Warehouse (location)")}
                   </dt>
                   <dd class="mt-0.5">
-                    <%= if @location_name do %>
-                      {@location_name}
+                    <%= if !@posted? and warehouse_options?(@warehouses) do %>
+                      <form phx-change="set_location" phx-submit="set_location">
+                        <select name="location_uuid" class="select select-sm select-bordered">
+                          <%= for warehouse <- @warehouses do %>
+                            <option
+                              value={warehouse.uuid}
+                              selected={@receipt.location_uuid == warehouse.uuid}
+                            >
+                              {warehouse.name}
+                            </option>
+                          <% end %>
+                        </select>
+                      </form>
                     <% else %>
-                      <span class="text-base-content/40">{dgettext("default", "— not set —")}</span>
+                      <%= if @location_name do %>
+                        {@location_name}
+                      <% else %>
+                        <span class="text-base-content/40">{dgettext("default", "— not set —")}</span>
+                      <% end %>
                     <% end %>
                   </dd>
                 </div>
@@ -1138,6 +1184,12 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
   defp fmt_qty(nil), do: "0"
   defp fmt_qty(%Decimal{} = d), do: Decimal.to_string(d, :normal)
   defp fmt_qty(v), do: to_string(v)
+
+  # `list_warehouses/0` returns nil when the warehouse LocationType isn't
+  # configured yet, or [] when configured but empty — neither is selectable.
+  defp warehouse_options?(nil), do: false
+  defp warehouse_options?([]), do: false
+  defp warehouse_options?(_), do: true
 
   # Builds source picker candidates from posted supplier orders.
   defp build_so_candidates do

@@ -22,12 +22,28 @@ defmodule PhoenixKitWarehouse.CommittedQuantities do
   For legacy refs without one, falls back to attributing the document's own
   aggregate `lines` (keyed by `line_quantity_field`) to that ref — a safe
   overcount for the rare pre-existing multi-source merge.
+
+  `opts`:
+    * `:status` — when given, only rows of `schema` whose `status` field
+      equals it are considered (in addition to the always-applied
+      `is_nil(deleted_at)` filter). Omit (the default) to consider every
+      non-deleted row regardless of status.
+
+      Leave this unset for "avoid double-importing the same source into two
+      documents" call sites (the common case) — that computation must
+      include the document's own not-yet-posted draft (it's what makes a
+      second import into the *same* still-draft document net out instead of
+      duplicating). Pass `status: "posted"` only for call sites computing an
+      actual on-hand/reservation effect, where a draft downstream document
+      hasn't happened yet and so must not be netted out.
   """
-  def compute(schema, ref_types, source_uuids, line_quantity_field) do
+  def compute(schema, ref_types, source_uuids, line_quantity_field, opts \\ []) do
     wanted = MapSet.new(source_uuids)
+    status = Keyword.get(opts, :status)
 
     schema
     |> where([d], is_nil(d.deleted_at))
+    |> maybe_filter_status(status)
     |> repo().all()
     |> Enum.reduce(%{}, fn doc, acc ->
       Enum.reduce(doc.source_refs || [], acc, fn ref, acc2 ->
@@ -40,6 +56,9 @@ defmodule PhoenixKitWarehouse.CommittedQuantities do
       end)
     end)
   end
+
+  defp maybe_filter_status(query, nil), do: query
+  defp maybe_filter_status(query, status), do: where(query, [d], d.status == ^status)
 
   @doc """
   Merges a `{ref_type, source_uuid}` ref carrying `imported_lines`

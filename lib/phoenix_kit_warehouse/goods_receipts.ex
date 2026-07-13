@@ -392,7 +392,7 @@ defmodule PhoenixKitWarehouse.GoodsReceipts do
 
     stock_map =
       item_uuids
-      |> StockLedger.stock_for_items()
+      |> StockLedger.stock_for_items_at_location(locked.location_uuid, repo)
       |> Map.new(&{&1.item_uuid, &1})
 
     case receive_lines(lines, stock_map, locked.location_uuid, repo) do

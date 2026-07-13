@@ -8,6 +8,7 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueFormLiveTest do
   alias PhoenixKitWarehouse.GoodsIssue
   alias PhoenixKitWarehouse.GoodsIssues
   alias PhoenixKitWarehouse.InternalOrders
+  alias PhoenixKitLocations.Locations
 
   @default_location_uuid "00000000-0000-0000-0000-000000000001"
 
@@ -100,6 +101,21 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueFormLiveTest do
 
   defp comments_path(uuid),
     do: PhoenixKit.Utils.Routes.path("/admin/warehouse/goods-issues/#{uuid}/comments")
+
+  defp setup_warehouses!(names) do
+    {:ok, type} =
+      Locations.create_location_type(%{name: "GI WH Type #{System.unique_integer([:positive])}"})
+
+    locations =
+      Enum.map(names, fn name ->
+        {:ok, loc} = Locations.create_location(%{name: name, status: "active"})
+        Locations.sync_location_types(loc.uuid, [type.uuid])
+        loc
+      end)
+
+    Warehouse.set_warehouse_location_type_uuid(type.uuid)
+    locations
+  end
 
   # ---------------------------------------------------------------------------
   # General tab — draft
@@ -401,6 +417,32 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueFormLiveTest do
       assert length(updated.lines) == 1
     end
 
+    test "manually attaching a customer order records its SourceKinds :kind, not a nil type", %{
+      conn: conn
+    } do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      {issue, _item_uuid} = create_draft_with_lines()
+      customer_order = PhoenixKitWarehouse.Test.Fixtures.insert_order!()
+
+      {:ok, lv, _html} = live(conn, edit_path(issue.uuid))
+
+      lv
+      |> element("button[phx-click='open_link_picker'][phx-value-kind='order']")
+      |> render_click()
+
+      lv
+      |> element(
+        "input[phx-click='source_picker_toggle'][phx-value-uuid='#{customer_order.uuid}']"
+      )
+      |> render_click()
+
+      lv |> element("button[phx-click='source_picker_confirm']") |> render_click()
+
+      updated = GoodsIssues.get_goods_issue!(issue.uuid)
+      assert %{"type" => "order", "uuid" => customer_order.uuid} in updated.source_refs
+    end
+
     test "removing an attached reference detaches it", %{conn: conn} do
       admin = create_admin_user()
       conn = log_in_admin(conn, admin)
@@ -450,6 +492,53 @@ defmodule PhoenixKitWarehouse.Web.GoodsIssueFormLiveTest do
       assert html =~ "Select all"
       refute has_element?(lv, "input[phx-value-uuid='#{io1.uuid}'][checked]")
       refute has_element?(lv, "input[phx-value-uuid='#{io2.uuid}'][checked]")
+    end
+  end
+
+  describe "warehouse selector" do
+    test "renders a warehouse select on the General tab of a draft", %{conn: conn} do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      [loc_a, loc_b] = setup_warehouses!(["GI Site A", "GI Site B"])
+
+      {:ok, issue} = GoodsIssues.create_goods_issue(%{location_uuid: loc_a.uuid, lines: []})
+
+      {:ok, _lv, html} = live(conn, edit_path(issue.uuid))
+
+      assert html =~ ~s(name="location_uuid")
+      assert html =~ "GI Site A"
+      assert html =~ "GI Site B"
+    end
+
+    test "changing the warehouse persists location_uuid on the draft", %{conn: conn} do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      [loc_a, loc_b] = setup_warehouses!(["GI Site A", "GI Site B"])
+
+      {:ok, issue} = GoodsIssues.create_goods_issue(%{location_uuid: loc_a.uuid, lines: []})
+
+      {:ok, lv, _html} = live(conn, edit_path(issue.uuid))
+
+      lv
+      |> element("form[phx-change='set_location']")
+      |> render_change(%{"location_uuid" => loc_b.uuid})
+
+      {:ok, updated} = GoodsIssues.get_goods_issue(issue.uuid)
+      assert updated.location_uuid == loc_b.uuid
+    end
+
+    test "warehouse shows as read-only text once posted", %{conn: conn} do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      [loc_a, _loc_b] = setup_warehouses!(["GI Site A", "GI Site B"])
+
+      {:ok, issue} = GoodsIssues.create_goods_issue(%{location_uuid: loc_a.uuid, lines: []})
+      {:ok, posted} = GoodsIssues.post_goods_issue(issue, admin.uuid)
+
+      {:ok, _lv, html} = live(conn, edit_path(posted.uuid))
+
+      refute html =~ ~s(phx-change="set_location")
+      assert html =~ "GI Site A"
     end
   end
 end

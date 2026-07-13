@@ -47,6 +47,13 @@ defmodule PhoenixKitWarehouse.Web.Components.WarehouseHeader do
         </.link>
         <.link
           role="tab"
+          navigate={PhoenixKit.Utils.Routes.path("/admin/warehouse/transfers")}
+          class={["tab", @active == :transfers && "tab-active"]}
+        >
+          {dgettext("default", "Transfers")}
+        </.link>
+        <.link
+          role="tab"
           navigate={PhoenixKit.Utils.Routes.path("/admin/warehouse/goods-receipts")}
           class={["tab", @active == :goods_receipts && "tab-active"]}
         >
@@ -58,6 +65,13 @@ defmodule PhoenixKitWarehouse.Web.Components.WarehouseHeader do
           class={["tab", @active == :goods_issues && "tab-active"]}
         >
           {dgettext("default", "Goods Issue")}
+        </.link>
+        <.link
+          role="tab"
+          navigate={PhoenixKit.Utils.Routes.path("/admin/warehouse/turnover")}
+          class={["tab", @active == :turnover && "tab-active"]}
+        >
+          {dgettext("default", "Turnover")}
         </.link>
       </div>
     </div>

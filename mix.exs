@@ -51,8 +51,8 @@ defmodule PhoenixKitWarehouse.MixProject do
       quality: ["format", "credo --strict", "dialyzer"],
       "quality.ci": ["format --check-formatted", "credo --strict", "dialyzer"],
       # Schema is applied by test/test_helper.exs on every `mix test` run via
-      # PhoenixKit.Migration.ensure_current/2 plus the module's own
-      # migration_module/0 — so there is no `ecto.migrate` step here.
+      # PhoenixKit.Migration.ensure_current/2 (including V143) — so there is
+      # no `ecto.migrate` step here.
       "test.setup": ["ecto.create --quiet -r PhoenixKitWarehouse.Test.Repo"],
       "test.reset": [
         "ecto.drop --quiet -r PhoenixKitWarehouse.Test.Repo",
@@ -84,12 +84,10 @@ defmodule PhoenixKitWarehouse.MixProject do
 
   defp deps do
     [
-      # The warehouse DB tables ship in core migration V140, published in
-      # phoenix_kit 1.7.182 — so the module needs at least that core release.
-      # hackney 4.x override mirrors core: stripity_stripe/ex_aws_sqs still pin 1.x,
-      # but core (>= 1.7.189) requires hackney ~> 4.0 and overrides only apply from the root project.
-      {:hackney, "~> 4.0", override: true},
-      pk_dep(:phoenix_kit, "~> 1.7.189"),
+      # The warehouse DB tables ship in core migration V143, published in
+      # phoenix_kit 1.7.189 — TODO(maintainer): confirm exact patch version
+      # at publish time (upstream currently at 1.7.188).
+      pk_dep(:phoenix_kit, "~> 1.7 and >= 1.7.189"),
       # Sibling PhoenixKit modules the warehouse UI/contexts build on:
       # comments embeds, catalogue products, locations, and billing currency.
       pk_dep(:phoenix_kit_billing, "~> 0.5"),

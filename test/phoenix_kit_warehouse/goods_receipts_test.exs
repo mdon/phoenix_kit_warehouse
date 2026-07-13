@@ -749,6 +749,35 @@ defmodule PhoenixKitWarehouse.GoodsReceiptsTest do
       assert Decimal.equal?(prev_qty, Decimal.new("0"))
     end
 
+    test "previous_quantity reflects only the receipt's own location, not stock at other warehouses" do
+      actor = user_uuid()
+      item_uuid = Ecto.UUID.generate()
+      other_location_uuid = Ecto.UUID.generate()
+
+      {:ok, _} =
+        Warehouse.upsert_quantity(item_uuid, Decimal.new("15"),
+          location_uuid: @default_location_uuid
+        )
+
+      {:ok, _} =
+        Warehouse.upsert_quantity(item_uuid, Decimal.new("100"),
+          location_uuid: other_location_uuid
+        )
+
+      receipt = create_draft!(%{lines: [sample_gr_line(item_uuid, received: "5")]})
+      {:ok, posted} = GoodsReceipts.post_goods_receipt(receipt, actor)
+
+      [line] = posted.lines
+      prev_qty = Warehouse.to_decimal(line["previous_quantity"])
+      assert Decimal.equal?(prev_qty, Decimal.new("15"))
+
+      # The other warehouse's stock must be untouched by this posting.
+      assert Decimal.equal?(
+               Warehouse.get_quantity(item_uuid, other_location_uuid),
+               Decimal.new("100")
+             )
+    end
+
     test "deduplicates lines by item_uuid on posting" do
       actor = user_uuid()
       item_uuid = Ecto.UUID.generate()

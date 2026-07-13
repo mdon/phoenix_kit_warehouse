@@ -4,8 +4,10 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias PhoenixKitWarehouse.GoodsIssues
   alias PhoenixKitWarehouse.InternalOrder
   alias PhoenixKitWarehouse.InternalOrders
+  alias PhoenixKitWarehouse.SupplierOrders
 
   @default_location_uuid "00000000-0000-0000-0000-000000000001"
 
@@ -296,6 +298,46 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLiveTest do
       refute html =~ "##{customer_order.data["order_number"]}"
       updated = InternalOrders.get_internal_order!(order.uuid)
       assert updated.source_refs == []
+    end
+  end
+
+  describe "downstream related documents" do
+    test "shows links to child supplier orders and goods issues", %{conn: conn} do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      order = create_draft()
+
+      {:ok, supplier_order} =
+        SupplierOrders.create_supplier_order(%{
+          internal_order_uuid: order.uuid,
+          location_uuid: @default_location_uuid,
+          lines: []
+        })
+
+      {:ok, goods_issue} =
+        GoodsIssues.create_goods_issue(%{
+          internal_order_uuid: order.uuid,
+          location_uuid: @default_location_uuid,
+          lines: []
+        })
+
+      {:ok, _lv, html} = live(conn, edit_path(order.uuid))
+
+      assert html =~ "Related documents"
+      assert html =~ "#SO-#{supplier_order.number}"
+      assert html =~ "#GI-#{goods_issue.number}"
+    end
+
+    test "does not show the Related documents block when there are no child documents", %{
+      conn: conn
+    } do
+      admin = create_admin_user()
+      conn = log_in_admin(conn, admin)
+      order = create_draft()
+
+      {:ok, _lv, html} = live(conn, edit_path(order.uuid))
+
+      refute html =~ "Related documents"
     end
   end
 

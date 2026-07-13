@@ -66,6 +66,15 @@ defmodule PhoenixKitWarehouse.Test.Router do
       live("/goods-issues/:uuid/lines", GoodsIssueFormLive, :lines)
       live("/goods-issues/:uuid/files", GoodsIssueFormLive, :files)
       live("/goods-issues/:uuid/comments", GoodsIssueFormLive, :comments)
+
+      live("/transfers", TransferIndexLive, :index)
+      live("/transfers/new", TransferFormLive, :new)
+      live("/transfers/:uuid", TransferFormLive, :edit)
+      live("/transfers/:uuid/items", TransferFormLive, :items)
+      live("/transfers/:uuid/files", TransferFormLive, :files)
+      live("/transfers/:uuid/comments", TransferFormLive, :comments)
+
+      live("/turnover", TurnoverReportLive, :index)
     end
   end
 end

@@ -5,7 +5,7 @@ defmodule PhoenixKitWarehouse.InventoryDocument do
 
   @type t :: %__MODULE__{}
 
-  @primary_key {:uuid, Ecto.UUID, autogenerate: true}
+  @primary_key {:uuid, UUIDv7, autogenerate: true}
   @foreign_key_type Ecto.UUID
 
   @statuses ~w(draft posted)
@@ -14,8 +14,9 @@ defmodule PhoenixKitWarehouse.InventoryDocument do
     field(:number, :integer, read_after_writes: true)
     field(:status, :string, default: "draft")
     field(:track_value, :boolean, default: false)
-    # Warehouse the count was performed at. Set programmatically (defaults to
-    # the configured default warehouse) — single-warehouse for now.
+    # Warehouse the count is performed at. Defaults to the configured default
+    # warehouse on creation; editable while the document is a draft (changing
+    # it re-seeds :lines from the new warehouse's stock — see Inventories.update_draft/2).
     field(:location_uuid, Ecto.UUID)
     field(:storage_folder_uuid, Ecto.UUID)
     field(:note, :string)
@@ -32,7 +33,7 @@ defmodule PhoenixKitWarehouse.InventoryDocument do
   @doc "Changeset for creating/editing draft inventory documents."
   def draft_changeset(doc, attrs) do
     doc
-    |> cast(attrs, [:track_value, :note, :lines, :created_by_uuid])
+    |> cast(attrs, [:track_value, :note, :lines, :created_by_uuid, :location_uuid])
     |> validate_inclusion(:status, @statuses)
   end
 

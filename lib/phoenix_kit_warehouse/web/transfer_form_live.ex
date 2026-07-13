@@ -1,14 +1,34 @@
-defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
+defmodule PhoenixKitWarehouse.Web.TransferFormLive do
   @moduledoc """
-  LiveView for creating and editing internal orders.
+  LiveView for creating and editing transfers (stock moved between two
+  warehouses).
 
   Handles:
-  - `:new`      — creates a draft and push_navigate to :edit path.
-  - `:edit`     — loads an existing order; :general tab.
-  - `:items`    — lines editor (draft only for adding/editing quantities).
+  - `:new`      — creates a draft (no locations, no lines) and push_navigate
+                  to :edit path. Immediate-draft pattern, like Internal Orders.
+  - `:edit`     — loads an existing transfer; :general tab.
+  - `:items`    — lines editor (transfer_quantity editable in draft only —
+                  once shipped the goods have physically left, so lines
+                  become read-only).
+  - `:files`    — MediaBrowser; storage folder resolved asynchronously.
+  - `:comments` — transfer comments thread.
 
-  Uses the admin-chrome pattern: `use PhoenixKitWeb, :live_view` +
-  `<.admin_page_header>`. No `<Layouts.app>`, no streams.
+  Status lifecycle: `draft -> in_transit -> done`, with a side `cancelled`
+  status reachable from `draft` (no stock postings) or `in_transit` (reverses
+  the ship posting, crediting stock back to the source). See
+  `PhoenixKitWarehouse.Transfers` for the posting mechanics.
+
+  Structurally a copy of `InternalOrderFormLive` (admin-chrome pattern:
+  `use PhoenixKitWeb, :live_view` + `<.admin_page_header>`, no self-wrap, no
+  streams), with two differences of substance:
+  - Two `<select>`s (source/destination warehouse) instead of one, editable
+    only while `status == "draft"`.
+  - No "import lines from a source" flow — a transfer has no natural upstream
+    document to pull required quantities from, so lines only ever come from
+    the catalogue "Add item" picker. The upstream `source_refs` traceability
+    link (via `PhoenixKitWarehouse.SourceKinds`) is still manual-link-only,
+    reusing the same picker component in its "link" mode.
+
   All navigation paths wrapped in `PhoenixKit.Utils.Routes.path/1`.
   """
 
@@ -16,12 +36,14 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
   use Gettext, backend: PhoenixKitWarehouse.Gettext
   use PhoenixKitComments.Embed
 
-  alias PhoenixKitWarehouse.DocRefs
-  alias PhoenixKitWarehouse.GoodsIssues
+  alias PhoenixKitWarehouse.ActivityLog
   alias PhoenixKitWarehouse.Comments
+  alias PhoenixKitWarehouse.DocRefs
   alias PhoenixKitWarehouse.InternalOrders
+  alias PhoenixKitWarehouse.StockLedger
   alias PhoenixKitWarehouse.StorageFolders
-  alias PhoenixKitWarehouse.SupplierOrders
+  alias PhoenixKitWarehouse.Transfer
+  alias PhoenixKitWarehouse.Transfers
   alias PhoenixKitWarehouse.Web.Components.{CommentsPanel, RelatedDocuments, WarehouseBrowser}
   alias PhoenixKit.Utils.Routes
   alias PhoenixKitCatalogue.Catalogue
@@ -47,7 +69,7 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
       |> assign(:current_user, current_user)
       |> assign(:admin?, admin?)
       |> assign(:show_add_picker_modal, false)
-      |> assign(:order, nil)
+      |> assign(:transfer, nil)
       |> assign(:lines, [])
       |> assign(:note, "")
       |> assign(:names, %{})
@@ -57,11 +79,12 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
       |> assign(:comments_available?, comments_available?)
       |> assign(:comment_count, 0)
       |> assign(:comments_subscribed?, false)
-      |> assign(:location_name, nil)
-      |> assign(:sub_order_ref, nil)
-      |> assign(:child_supplier_order_refs, [])
-      |> assign(:child_goods_issue_refs, [])
-      |> assign(:page_title, dgettext("default", "Internal Order"))
+      |> assign(:source_location_name, nil)
+      |> assign(:destination_location_name, nil)
+      |> assign(:warehouses, StockLedger.list_warehouses())
+      |> assign(:source_refs, [])
+      |> assign(:show_cancel_confirm_modal, false)
+      |> assign(:page_title, dgettext("default", "Transfer"))
       |> assign(:catalogue_summaries, [])
       |> assign(:expanded_catalogues, MapSet.new())
       |> assign(:expanded_categories, MapSet.new())
@@ -72,12 +95,10 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
       |> assign(:add_mode, :one)
       |> assign(:search_mode, :list)
       |> assign(:show_source_picker, false)
-      |> assign(:picker_purpose, :import)
       |> assign(:source_picker_candidates, [])
       |> assign(:source_picker_selected, MapSet.new())
       |> assign(:source_picker_selected_meta, %{})
       |> assign(:source_picker_query, "")
-      |> assign(:source_refs, [])
       |> PhoenixKitWeb.Components.MediaBrowser.setup_uploads()
 
     {:ok, socket}
@@ -100,25 +121,25 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
 
     case action do
       :new ->
-        handle_params_new(socket, locale)
+        handle_params_new(socket)
 
       :edit ->
         uuid = params["uuid"]
-        socket = load_order_into_socket(socket, uuid, locale)
+        socket = load_transfer_into_socket(socket, uuid, locale)
 
         {:noreply,
          socket |> assign(:active_tab, :general) |> maybe_subscribe_and_refresh_comments()}
 
       :items ->
         uuid = params["uuid"]
-        socket = load_order_into_socket(socket, uuid, locale)
+        socket = load_transfer_into_socket(socket, uuid, locale)
 
         {:noreply,
          socket |> assign(:active_tab, :items) |> maybe_subscribe_and_refresh_comments()}
 
       :files ->
         uuid = params["uuid"]
-        socket = load_order_into_socket(socket, uuid, locale)
+        socket = load_transfer_into_socket(socket, uuid, locale)
 
         {:noreply,
          socket
@@ -128,7 +149,7 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
 
       :comments ->
         uuid = params["uuid"]
-        socket = load_order_into_socket(socket, uuid, locale)
+        socket = load_transfer_into_socket(socket, uuid, locale)
 
         {:noreply,
          socket
@@ -140,70 +161,53 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
     end
   end
 
-  defp handle_params_new(socket, _locale) do
-    scope = socket.assigns[:phoenix_kit_current_scope]
-    current_user = scope && PhoenixKit.Users.Auth.Scope.user(scope)
+  defp handle_params_new(socket) do
+    current_user = socket.assigns.current_user
     user_uuid = current_user && current_user.uuid
 
-    attrs = %{
-      lines: [],
-      created_by_uuid: user_uuid
-    }
+    attrs = %{lines: [], created_by_uuid: user_uuid}
 
-    case InternalOrders.create_internal_order(attrs) do
-      {:ok, order} ->
+    case Transfers.create_transfer(attrs) do
+      {:ok, transfer} ->
         {:noreply,
-         push_navigate(socket,
-           to: Routes.path("/admin/warehouse/internal-orders/#{order.uuid}")
-         )}
+         push_navigate(socket, to: Routes.path("/admin/warehouse/transfers/#{transfer.uuid}"))}
 
       {:error, _changeset} ->
         {:noreply,
          socket
-         |> put_flash(:error, dgettext("default", "Failed to create draft internal order"))
-         |> push_navigate(to: Routes.path("/admin/warehouse/internal-orders"))}
+         |> put_flash(:error, dgettext("default", "Failed to create draft transfer"))
+         |> push_navigate(to: Routes.path("/admin/warehouse/transfers"))}
     end
   end
 
-  defp load_order_into_socket(socket, uuid, locale) do
-    order = InternalOrders.get_internal_order!(uuid)
-    same_order? = match?(%{uuid: ^uuid}, socket.assigns[:order])
+  defp load_transfer_into_socket(socket, uuid, locale) do
+    transfer = Transfers.get_transfer!(uuid)
+    same_transfer? = match?(%{uuid: ^uuid}, socket.assigns[:transfer])
 
-    sub_order_ref = DocRefs.sub_order_ref(sub_order_uuid_of(order))
-    child_supplier_order_refs = load_child_supplier_order_refs(uuid)
-    child_goods_issue_refs = load_child_goods_issue_refs(uuid)
-
-    source_refs = DocRefs.refs_for(order.source_refs || [])
+    source_refs = DocRefs.refs_for(transfer.source_refs || [])
 
     socket =
       socket
-      |> assign(:order, order)
-      |> assign(:location_name, resolve_location_name(order.location_uuid))
-      |> assign(:sub_order_ref, sub_order_ref)
-      |> assign(:child_supplier_order_refs, child_supplier_order_refs)
-      |> assign(:child_goods_issue_refs, child_goods_issue_refs)
+      |> assign(:transfer, transfer)
+      |> assign(:source_location_name, resolve_location_name(transfer.source_location_uuid))
+      |> assign(
+        :destination_location_name,
+        resolve_location_name(transfer.destination_location_uuid)
+      )
       |> assign(:source_refs, source_refs)
       |> assign(
         :page_title,
-        dgettext("default", "Internal Order #%{number}", number: order.number)
+        dgettext("default", "Transfer #%{number}", number: transfer.number)
       )
 
-    if same_order?, do: socket, else: assign_edit_buffer(socket, order, locale)
+    if same_transfer?, do: socket, else: assign_edit_buffer(socket, transfer, locale)
   end
 
-  defp load_child_supplier_order_refs(internal_order_uuid) do
-    DocRefs.supplier_order_refs_for_internal_order(internal_order_uuid)
-  end
-
-  defp load_child_goods_issue_refs(internal_order_uuid) do
-    DocRefs.goods_issue_refs_for_internal_order(internal_order_uuid)
-  end
-
-  defp assign_edit_buffer(socket, order, locale) do
+  defp assign_edit_buffer(socket, transfer, locale) do
     socket
-    |> assign(:lines, order.lines)
-    |> assign(:note, order.note || "")
-    |> assign(:names, build_names_map(order.lines, locale))
+    |> assign(:lines, transfer.lines)
+    |> assign(:note, transfer.note || "")
+    |> assign(:names, build_names_map(transfer.lines, locale))
   end
 
   defp resolve_location_name(nil), do: nil
@@ -226,7 +230,7 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
   def handle_event("validate", _params, socket), do: {:noreply, socket}
 
   # ---------------------------------------------------------------------------
-  # Add picker modal handlers
+  # Add picker modal handlers (catalogue "Add item")
   # ---------------------------------------------------------------------------
 
   @impl true
@@ -246,36 +250,15 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
   end
 
   # ---------------------------------------------------------------------------
-  # Source picker modal handlers
+  # Source picker modal handlers — manual "link" mode only (no line import)
   # ---------------------------------------------------------------------------
 
-  @impl true
-  def handle_event("open_source_picker", _params, socket) do
-    candidates = InternalOrders.list_import_candidates()
-
-    socket =
-      socket
-      |> assign(:picker_purpose, :import)
-      |> assign(:show_source_picker, true)
-      |> assign(:source_picker_candidates, candidates)
-      |> assign(:source_picker_selected, MapSet.new())
-      |> assign(:source_picker_selected_meta, %{})
-      |> assign(:source_picker_query, "")
-
-    {:noreply, socket}
-  end
-
-  @doc false
-  # Opens the picker in "manual link" mode — attaches a traceability
-  # reference without touching lines. Unlike "open_source_picker" (line
-  # import), this works on both draft and posted internal orders.
   @impl true
   def handle_event("open_link_picker", _params, socket) do
     candidates = InternalOrders.list_import_candidates()
 
     socket =
       socket
-      |> assign(:picker_purpose, :link)
       |> assign(:show_source_picker, true)
       |> assign(:source_picker_candidates, candidates)
       |> assign(:source_picker_selected, MapSet.new())
@@ -309,9 +292,7 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
       if MapSet.member?(selected, uuid) do
         {MapSet.delete(selected, uuid), Map.delete(meta, uuid)}
       else
-        candidate =
-          Enum.find(socket.assigns.source_picker_candidates, &(&1.uuid == uuid))
-
+        candidate = Enum.find(socket.assigns.source_picker_candidates, &(&1.uuid == uuid))
         type = candidate && candidate.kind
         {MapSet.put(selected, uuid), Map.put(meta, uuid, type)}
       end
@@ -348,70 +329,30 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
   end
 
   @impl true
-  def handle_event(
-        "source_picker_confirm",
-        _params,
-        %{assigns: %{picker_purpose: :import}} = socket
-      ) do
-    order = socket.assigns.order
-    current_user = socket.assigns.current_user
-    user_uuid = current_user && current_user.uuid
-    meta = socket.assigns.source_picker_selected_meta
-
-    selected_refs =
-      meta
-      |> Enum.map(fn {uuid, type} -> %{"type" => type, "uuid" => uuid} end)
-
-    case InternalOrders.import_from_sources(order, selected_refs, user_uuid) do
-      {:ok, updated_order} ->
-        locale = socket.assigns.locale
-        source_refs = DocRefs.refs_for(updated_order.source_refs || [])
-
-        socket =
-          socket
-          |> assign(:order, updated_order)
-          |> assign(:lines, updated_order.lines)
-          |> assign(:names, build_names_map(updated_order.lines, locale))
-          |> assign(:source_refs, source_refs)
-          |> assign(:show_source_picker, false)
-          |> assign(:source_picker_selected, MapSet.new())
-          |> assign(:source_picker_selected_meta, %{})
-          |> assign(:source_picker_query, "")
-          |> put_flash(:info, dgettext("default", "Lines imported"))
-
-        {:noreply, socket}
-
-      {:error, _reason} ->
-        {:noreply,
-         socket
-         |> assign(:show_source_picker, false)
-         |> put_flash(:error, dgettext("default", "Failed to import lines"))}
-    end
-  end
-
   def handle_event("source_picker_confirm", _params, socket) do
-    order = socket.assigns.order
+    transfer = socket.assigns.transfer
     meta = socket.assigns.source_picker_selected_meta
 
     result =
-      Enum.reduce_while(meta, {:ok, order}, fn {uuid, type}, {:ok, current_order} ->
-        case InternalOrders.add_source_ref(current_order, type, uuid) do
+      Enum.reduce_while(meta, {:ok, transfer}, fn {uuid, type}, {:ok, current_transfer} ->
+        case Transfers.add_source_ref(current_transfer, type, uuid) do
           {:ok, updated} -> {:cont, {:ok, updated}}
           error -> {:halt, error}
         end
       end)
 
     case result do
-      {:ok, updated_order} ->
-        source_refs = DocRefs.refs_for(updated_order.source_refs || [])
+      {:ok, updated_transfer} ->
+        source_refs = DocRefs.refs_for(updated_transfer.source_refs || [])
 
         socket =
           socket
-          |> assign(:order, updated_order)
+          |> assign(:transfer, updated_transfer)
           |> assign(:source_refs, source_refs)
           |> assign(:show_source_picker, false)
           |> assign(:source_picker_selected, MapSet.new())
           |> assign(:source_picker_selected_meta, %{})
+          |> assign(:source_picker_query, "")
           |> put_flash(:info, dgettext("default", "Link added"))
 
         {:noreply, socket}
@@ -426,14 +367,14 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
 
   @impl true
   def handle_event("remove_source_ref", %{"type" => type, "uuid" => uuid}, socket) do
-    order = socket.assigns.order
+    transfer = socket.assigns.transfer
 
-    case InternalOrders.remove_source_ref(order, type, uuid) do
-      {:ok, updated_order} ->
+    case Transfers.remove_source_ref(transfer, type, uuid) do
+      {:ok, updated_transfer} ->
         socket =
           socket
-          |> assign(:order, updated_order)
-          |> assign(:source_refs, DocRefs.refs_for(updated_order.source_refs || []))
+          |> assign(:transfer, updated_transfer)
+          |> assign(:source_refs, DocRefs.refs_for(updated_transfer.source_refs || []))
 
         {:noreply, socket}
 
@@ -441,6 +382,10 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
         {:noreply, put_flash(socket, :error, dgettext("default", "Failed to remove link"))}
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # Add-item picker: mode toggles + catalogue tree navigation + search
+  # ---------------------------------------------------------------------------
 
   @impl true
   def handle_event("set_add_mode", %{"mode" => mode}, socket) do
@@ -511,12 +456,10 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
 
   @impl true
   def handle_event("add_position", %{"item_uuid" => item_uuid}, socket) do
-    posted? = socket.assigns.order && socket.assigns.order.status == "posted"
+    editable? = socket.assigns.transfer && socket.assigns.transfer.status == "draft"
 
     socket =
-      if posted? do
-        socket
-      else
+      if editable? do
         socket = add_item_to_lines(socket, item_uuid)
 
         case socket.assigns.add_mode do
@@ -530,6 +473,8 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
           :many ->
             socket
         end
+      else
+        socket
       end
 
     {:noreply, socket}
@@ -541,23 +486,27 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
 
   @impl true
   def handle_event("remove_line", %{"index" => index_str}, socket) do
-    index = String.to_integer(index_str)
-    lines = List.delete_at(socket.assigns.lines, index)
-    {:noreply, assign(socket, :lines, lines)}
+    lines = socket.assigns.lines
+
+    case parse_line_index(index_str, lines) do
+      {:ok, index} -> {:noreply, assign(socket, :lines, List.delete_at(lines, index))}
+      :error -> {:noreply, socket}
+    end
   end
 
   @impl true
-  def handle_event("set_required_qty", params, socket) do
-    index = String.to_integer(params["index"])
-    raw = params["required_quantity"] || "0"
+  def handle_event("set_transfer_qty", params, socket) do
+    lines = socket.assigns.lines
+    raw = params["transfer_quantity"] || "0"
 
-    lines =
-      socket.assigns.lines
-      |> List.update_at(index, fn line ->
-        Map.put(line, "required_quantity", raw)
-      end)
+    case parse_line_index(params["index"], lines) do
+      {:ok, index} ->
+        updated = List.update_at(lines, index, &Map.put(&1, "transfer_quantity", raw))
+        {:noreply, assign(socket, :lines, updated)}
 
-    {:noreply, assign(socket, :lines, lines)}
+      :error ->
+        {:noreply, socket}
+    end
   end
 
   @impl true
@@ -566,23 +515,34 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
   end
 
   # ---------------------------------------------------------------------------
+  # Warehouse selectors — draft only
+  # ---------------------------------------------------------------------------
+
+  @impl true
+  def handle_event("set_source_location", %{"location_uuid" => uuid}, socket) do
+    update_location(socket, :source_location_uuid, uuid)
+  end
+
+  @impl true
+  def handle_event("set_destination_location", %{"location_uuid" => uuid}, socket) do
+    update_location(socket, :destination_location_uuid, uuid)
+  end
+
+  # ---------------------------------------------------------------------------
   # Save draft
   # ---------------------------------------------------------------------------
 
   @impl true
   def handle_event("save_draft", _params, socket) do
-    attrs = %{
-      note: socket.assigns.note,
-      lines: socket.assigns.lines
-    }
+    attrs = %{note: socket.assigns.note, lines: socket.assigns.lines}
 
-    case socket.assigns.order do
-      %PhoenixKitWarehouse.InternalOrder{status: "draft"} = order ->
-        case InternalOrders.update_draft(order, attrs) do
-          {:ok, updated_order} ->
+    case socket.assigns.transfer do
+      %Transfer{status: "draft"} = transfer ->
+        case Transfers.update_draft(transfer, attrs) do
+          {:ok, updated_transfer} ->
             {:noreply,
              socket
-             |> assign(:order, updated_order)
+             |> assign(:transfer, updated_transfer)
              |> put_flash(:info, dgettext("default", "Draft saved"))}
 
           {:error, _changeset} ->
@@ -596,40 +556,143 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
   end
 
   # ---------------------------------------------------------------------------
-  # Conduct (post)
+  # Ship (draft -> in_transit) — DECREASES stock at the source
   # ---------------------------------------------------------------------------
 
   @impl true
-  def handle_event("conduct", _params, socket) do
+  def handle_event("ship", _params, socket) do
     current_user = socket.assigns.current_user
     user_uuid = current_user && current_user.uuid
 
-    save_attrs = %{
-      note: socket.assigns.note,
-      lines: socket.assigns.lines
-    }
+    save_attrs = %{note: socket.assigns.note, lines: socket.assigns.lines}
+    transfer = socket.assigns.transfer
 
-    order = socket.assigns.order
-
-    with {:ok, saved_order} <- ensure_saved(order, save_attrs),
-         {:ok, _posted_order} <- InternalOrders.post_internal_order(saved_order, user_uuid) do
+    with {:ok, saved_transfer} <- ensure_saved(transfer, save_attrs),
+         {:ok, _shipped_transfer} <- Transfers.ship_transfer(saved_transfer, user_uuid) do
       {:noreply,
        socket
-       |> put_flash(:info, dgettext("default", "Internal order conducted"))
-       |> push_navigate(to: Routes.path("/admin/warehouse/internal-orders"))}
+       |> put_flash(:info, dgettext("default", "Transfer shipped — stock updated at source"))
+       |> push_navigate(to: Routes.path("/admin/warehouse/transfers"))}
     else
       {:error, :not_draft} ->
+        {:noreply, put_flash(socket, :error, dgettext("default", "Document is already shipped"))}
+
+      {:error, :locations_required} ->
         {:noreply,
-         put_flash(socket, :error, dgettext("default", "Document is already conducted"))}
+         put_flash(
+           socket,
+           :error,
+           dgettext(
+             "default",
+             "Please select two different warehouses before shipping"
+           )
+         )}
+
+      {:error, {:insufficient_stock, item_uuid}} ->
+        line = Enum.find(socket.assigns.lines, &(&1["item_uuid"] == item_uuid))
+        item_name = (line && line["name"]) || item_uuid
+
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           dgettext(
+             "default",
+             "Insufficient stock for: %{item}. Reduce quantity or check stock levels.",
+             item: item_name
+           )
+         )}
 
       {:error, _reason} ->
-        {:noreply,
-         put_flash(socket, :error, dgettext("default", "Failed to conduct internal order"))}
+        {:noreply, put_flash(socket, :error, dgettext("default", "Failed to ship transfer"))}
     end
   end
 
   # ---------------------------------------------------------------------------
-  # Save correction (note-only, admin-only)
+  # Receive (in_transit -> done) — INCREASES stock at the destination
+  # ---------------------------------------------------------------------------
+
+  @impl true
+  def handle_event("receive", _params, socket) do
+    current_user = socket.assigns.current_user
+    user_uuid = current_user && current_user.uuid
+    transfer = socket.assigns.transfer
+
+    case Transfers.receive_transfer(transfer, user_uuid) do
+      {:ok, _received_transfer} ->
+        {:noreply,
+         socket
+         |> put_flash(
+           :info,
+           dgettext("default", "Transfer received — stock updated at destination")
+         )
+         |> push_navigate(to: Routes.path("/admin/warehouse/transfers"))}
+
+      {:error, :not_in_transit} ->
+        {:noreply, put_flash(socket, :error, dgettext("default", "Document is not in transit"))}
+
+      {:error, :locations_required} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           dgettext("default", "Both warehouses must be set before receiving")
+         )}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, dgettext("default", "Failed to receive transfer"))}
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Cancel — from draft (no postings) or in_transit (reverses the ship
+  # posting). The in_transit path is gated behind a confirmation modal since
+  # it reverses stock that has already moved; draft cancellation fires
+  # directly since nothing has moved yet.
+  # ---------------------------------------------------------------------------
+
+  @impl true
+  def handle_event("open_cancel_confirm", _params, socket) do
+    {:noreply, assign(socket, :show_cancel_confirm_modal, true)}
+  end
+
+  @impl true
+  def handle_event("close_cancel_confirm", _params, socket) do
+    {:noreply, assign(socket, :show_cancel_confirm_modal, false)}
+  end
+
+  @impl true
+  def handle_event("cancel", _params, socket) do
+    current_user = socket.assigns.current_user
+    user_uuid = current_user && current_user.uuid
+    transfer = socket.assigns.transfer
+
+    case Transfers.cancel_transfer(transfer, user_uuid) do
+      {:ok, cancelled_transfer} ->
+        ActivityLog.log_transfer_cancelled(cancelled_transfer, actor: current_user)
+
+        {:noreply,
+         socket
+         |> assign(:show_cancel_confirm_modal, false)
+         |> put_flash(:info, dgettext("default", "Transfer cancelled"))
+         |> push_navigate(to: Routes.path("/admin/warehouse/transfers"))}
+
+      {:error, :not_cancellable} ->
+        {:noreply,
+         socket
+         |> assign(:show_cancel_confirm_modal, false)
+         |> put_flash(:error, dgettext("default", "This transfer can no longer be cancelled"))}
+
+      {:error, _reason} ->
+        {:noreply,
+         socket
+         |> assign(:show_cancel_confirm_modal, false)
+         |> put_flash(:error, dgettext("default", "Failed to cancel transfer"))}
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Save correction (note-only, admin-only, done/cancelled only)
   # ---------------------------------------------------------------------------
 
   @impl true
@@ -638,126 +701,18 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
   end
 
   def handle_event("save_correction", _params, socket) do
-    order = socket.assigns.order
+    transfer = socket.assigns.transfer
     attrs = %{note: socket.assigns.note}
 
-    case InternalOrders.correct_internal_order(order, attrs) do
-      {:ok, corrected_order} ->
+    case Transfers.correct_transfer(transfer, attrs) do
+      {:ok, corrected_transfer} ->
         {:noreply,
          socket
-         |> assign(:order, corrected_order)
+         |> assign(:transfer, corrected_transfer)
          |> put_flash(:info, dgettext("default", "Correction saved"))}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, dgettext("default", "Failed to save correction"))}
-    end
-  end
-
-  # ---------------------------------------------------------------------------
-  # Generate supplier orders (posted only)
-  # ---------------------------------------------------------------------------
-
-  @impl true
-  def handle_event("generate_supplier_orders", _params, socket) do
-    order = socket.assigns.order
-
-    case order do
-      %PhoenixKitWarehouse.InternalOrder{status: "posted"} ->
-        current_user = socket.assigns.current_user
-        user_uuid = current_user && current_user.uuid
-
-        case SupplierOrders.generate_from_internal_order(order, user_uuid) do
-          {:ok, %{supplier_orders: created, unassigned_lines: unassigned}} ->
-            n = length(created)
-            m = length(unassigned)
-
-            msg =
-              cond do
-                n > 0 and m > 0 ->
-                  dgettext(
-                    "default",
-                    "Generated %{n} supplier order(s). %{m} line(s) could not be assigned to a supplier.",
-                    n: n,
-                    m: m
-                  )
-
-                n > 0 ->
-                  dgettext("default", "Generated %{n} supplier order(s).", n: n)
-
-                m > 0 ->
-                  dgettext(
-                    "default",
-                    "No supplier orders created. %{m} line(s) could not be assigned (0 or multiple suppliers).",
-                    m: m
-                  )
-
-                true ->
-                  dgettext("default", "No lines required restocking.")
-              end
-
-            socket =
-              socket
-              |> put_flash(:info, msg)
-              |> push_navigate(to: Routes.path("/admin/warehouse/supplier-orders"))
-
-            {:noreply, socket}
-
-          {:error, _reason} ->
-            {:noreply,
-             put_flash(socket, :error, dgettext("default", "Failed to generate supplier orders"))}
-        end
-
-      _ ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           dgettext("default", "Only posted internal orders can generate supplier orders")
-         )}
-    end
-  end
-
-  # ---------------------------------------------------------------------------
-  # Issue to production (posted only)
-  # ---------------------------------------------------------------------------
-
-  @impl true
-  def handle_event("issue_to_production", _params, socket) do
-    order = socket.assigns.order
-    admin? = socket.assigns.admin?
-
-    case order do
-      %PhoenixKitWarehouse.InternalOrder{status: "posted"} when admin? ->
-        current_user = socket.assigns.current_user
-        user_uuid = current_user && current_user.uuid
-
-        case GoodsIssues.create_from_internal_order(order, user_uuid) do
-          {:ok, goods_issue} ->
-            {:noreply,
-             socket
-             |> put_flash(
-               :info,
-               dgettext("default", "Goods issue #%{number} created", number: goods_issue.number)
-             )
-             |> push_navigate(
-               to: Routes.path("/admin/warehouse/goods-issues/#{goods_issue.uuid}")
-             )}
-
-          {:error, _reason} ->
-            {:noreply,
-             put_flash(socket, :error, dgettext("default", "Failed to create goods issue"))}
-        end
-
-      %PhoenixKitWarehouse.InternalOrder{status: "posted"} ->
-        {:noreply, put_flash(socket, :error, dgettext("default", "Not authorized"))}
-
-      _ ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           dgettext("default", "Only posted internal orders can create goods issues")
-         )}
     end
   end
 
@@ -785,9 +740,9 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
 
   def handle_info({:comments_updated, _payload}, socket) do
     count =
-      case socket.assigns.order do
+      case socket.assigns.transfer do
         %{uuid: uuid} when not is_nil(uuid) ->
-          Comments.count(:internal_order, uuid)
+          Comments.count(:transfer, uuid)
 
         _ ->
           0
@@ -810,74 +765,61 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
   def render(assigns) do
     assigns =
       assigns
-      |> assign(:posted?, assigns.order && assigns.order.status == "posted")
-      |> assign(:order_uuid, assigns.order && assigns.order.uuid)
-
-    assigns = assign_new(assigns, :sub_order_ref, fn -> nil end)
-    assigns = assign_new(assigns, :child_supplier_order_refs, fn -> [] end)
-    assigns = assign_new(assigns, :child_goods_issue_refs, fn -> [] end)
-    assigns = assign_new(assigns, :source_refs, fn -> [] end)
+      |> assign(:draft?, assigns.transfer && assigns.transfer.status == "draft")
+      |> assign(:in_transit?, assigns.transfer && assigns.transfer.status == "in_transit")
+      |> assign(
+        :terminal?,
+        assigns.transfer && assigns.transfer.status in ["done", "cancelled"]
+      )
+      |> assign(
+        :editable_locations?,
+        assigns.transfer && assigns.transfer.status == "draft"
+      )
+      |> assign(:transfer_uuid, assigns.transfer && assigns.transfer.uuid)
 
     ~H"""
     <div class="flex flex-col mx-auto max-w-none sm:px-4 py-2 sm:py-6 gap-4">
       <.admin_page_header title={@page_title}>
         <:actions>
-          <%!-- Draft state: Save draft + Conduct --%>
-          <%= if !@posted? and @active_tab in [:general, :items] do %>
-            <button
-              type="button"
-              phx-click="save_draft"
-              class="btn btn-ghost btn-sm"
-            >
+          <%!-- Draft state: Save draft + Cancel + Ship --%>
+          <%= if @draft? and @active_tab in [:general, :items] do %>
+            <button type="button" phx-click="save_draft" class="btn btn-ghost btn-sm">
               {dgettext("default", "Save draft")}
             </button>
-            <button
-              type="button"
-              phx-click="conduct"
-              class="btn btn-primary btn-sm"
-            >
-              <.icon name="hero-check" class="w-4 h-4" /> {dgettext("default", "Conduct")}
+            <button type="button" phx-click="cancel" class="btn btn-outline btn-error btn-sm">
+              {dgettext("default", "Cancel")}
+            </button>
+            <button type="button" phx-click="ship" class="btn btn-primary btn-sm">
+              <.icon name="hero-truck" class="w-4 h-4" /> {dgettext("default", "Ship")}
             </button>
           <% end %>
-          <%!-- Posted + admin: note correction + badge --%>
-          <%= if @posted? and @admin? and @active_tab == :general do %>
+          <%!-- In transit: Cancel (confirm) + Receive --%>
+          <%= if @in_transit? and @active_tab in [:general, :items] do %>
             <button
               type="button"
-              phx-click="save_correction"
-              class="btn btn-ghost btn-sm"
+              phx-click="open_cancel_confirm"
+              class="btn btn-outline btn-error btn-sm"
             >
+              {dgettext("default", "Cancel")}
+            </button>
+            <button type="button" phx-click="receive" class="btn btn-primary btn-sm">
+              <.icon name="hero-check" class="w-4 h-4" /> {dgettext("default", "Receive")}
+            </button>
+          <% end %>
+          <%!-- Terminal state + admin: note correction --%>
+          <%= if @terminal? and @admin? and @active_tab == :general do %>
+            <button type="button" phx-click="save_correction" class="btn btn-ghost btn-sm">
               {dgettext("default", "Save correction")}
             </button>
           <% end %>
-          <%!-- Posted badge (always shown when posted) --%>
-          <%= if @posted? do %>
-            <span class="badge badge-success badge-lg">{dgettext("default", "Conducted")}</span>
-          <% end %>
-          <%!-- Generate supplier orders (posted only) --%>
-          <%= if @posted? do %>
-            <button
-              type="button"
-              phx-click="generate_supplier_orders"
-              class="btn btn-secondary btn-sm"
+          <%!-- Status badge (in_transit / done / cancelled) --%>
+          <%= if @transfer do %>
+            <span
+              :if={@transfer.status != "draft"}
+              class={["badge badge-lg", status_badge_class(@transfer.status)]}
             >
-              <.icon name="hero-truck" class="w-4 h-4" /> {dgettext(
-                "default",
-                "Generate supplier orders"
-              )}
-            </button>
-          <% end %>
-          <%!-- Issue to production (posted only) --%>
-          <%= if @posted? do %>
-            <button
-              type="button"
-              phx-click="issue_to_production"
-              class="btn btn-accent btn-sm"
-            >
-              <.icon name="hero-arrow-up-on-square" class="w-4 h-4" /> {dgettext(
-                "default",
-                "Issue to production"
-              )}
-            </button>
+              {status_label(@transfer.status)}
+            </span>
           <% end %>
         </:actions>
       </.admin_page_header>
@@ -885,28 +827,28 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
       <%!-- Tab navigation --%>
       <div class="tabs tabs-border">
         <.link
-          patch={Routes.path("/admin/warehouse/internal-orders/#{@order_uuid}")}
+          patch={Routes.path("/admin/warehouse/transfers/#{@transfer_uuid}")}
           class={["tab", @active_tab == :general && "tab-active"]}
         >
           {dgettext("default", "General")}
         </.link>
         <.link
-          :if={@order_uuid}
-          patch={Routes.path("/admin/warehouse/internal-orders/#{@order_uuid}/items")}
+          :if={@transfer_uuid}
+          patch={Routes.path("/admin/warehouse/transfers/#{@transfer_uuid}/items")}
           class={["tab", @active_tab == :items && "tab-active"]}
         >
           {dgettext("default", "Items")}
         </.link>
         <.link
-          :if={@order_uuid}
-          patch={Routes.path("/admin/warehouse/internal-orders/#{@order_uuid}/files")}
+          :if={@transfer_uuid}
+          patch={Routes.path("/admin/warehouse/transfers/#{@transfer_uuid}/files")}
           class={["tab", @active_tab == :files && "tab-active"]}
         >
           {dgettext("default", "Files")}
         </.link>
         <.link
-          :if={@order_uuid}
-          patch={Routes.path("/admin/warehouse/internal-orders/#{@order_uuid}/comments")}
+          :if={@transfer_uuid}
+          patch={Routes.path("/admin/warehouse/transfers/#{@transfer_uuid}/comments")}
           class={["tab", @active_tab == :comments && "tab-active"]}
         >
           {dgettext("default", "Comments")}
@@ -916,24 +858,24 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
         </.link>
       </div>
 
-      <%!-- Posted info banner (non-admin only) --%>
-      <%= if @posted? and not @admin? do %>
-        <div class="alert alert-success">
-          <.icon name="hero-check-circle" class="w-5 h-5" />
-          <span>{dgettext("default", "This internal order has been conducted and is now read-only.")}</span>
+      <%!-- Status info banner (non-admin only) --%>
+      <%= if @transfer && @transfer.status != "draft" and not @admin? do %>
+        <div class="alert alert-info">
+          <.icon name="hero-information-circle" class="w-5 h-5" />
+          <span>{transfer_status_banner(@transfer.status)}</span>
         </div>
       <% end %>
 
       <%!-- Tab: General --%>
       <%= if @active_tab == :general do %>
-        <%= if !@posted? do %>
+        <%= if @draft? do %>
           <div class="card bg-base-100 shadow-sm">
             <div class="card-body p-4 flex flex-col gap-3">
               <div>
                 <form phx-change="set_note" phx-submit="set_note">
                   <input
                     type="text"
-                    id="io-note-input"
+                    id="tr-note-input"
                     name="note"
                     value={@note}
                     placeholder={dgettext("default", "Note (optional)")}
@@ -947,89 +889,108 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
           </div>
         <% end %>
 
-        <%= if @order do %>
+        <%= if @transfer do %>
           <div class="card bg-base-100 shadow-sm">
             <div class="card-body p-4">
               <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <div>
                   <dt class="text-base-content/60 font-medium">{dgettext("default", "Number")}</dt>
-                  <dd class="mt-0.5 font-mono">#IO-{@order.number}</dd>
+                  <dd class="mt-0.5 font-mono">#TR-{@transfer.number}</dd>
                 </div>
                 <div>
                   <dt class="text-base-content/60 font-medium">{dgettext("default", "Status")}</dt>
                   <dd class="mt-0.5">
-                    <span class={[
-                      "badge badge-sm",
-                      @order.status == "posted" && "badge-success",
-                      @order.status == "draft" && "badge-warning"
-                    ]}>
-                      {@order.status}
+                    <span class={["badge badge-sm", status_badge_class(@transfer.status)]}>
+                      {status_label(@transfer.status)}
                     </span>
                   </dd>
                 </div>
-                <%= if @order.inserted_at do %>
+                <%= if @transfer.inserted_at do %>
                   <div>
                     <dt class="text-base-content/60 font-medium">
                       {dgettext("default", "Created")}
                     </dt>
                     <dd class="mt-0.5">
-                      {Calendar.strftime(@order.inserted_at, "%Y-%m-%d %H:%M")}
+                      {Calendar.strftime(@transfer.inserted_at, "%Y-%m-%d %H:%M")}
                     </dd>
                   </div>
                 <% end %>
-                <%= if @order.posted_at do %>
+                <%= if @transfer.shipped_at do %>
                   <div>
                     <dt class="text-base-content/60 font-medium">
-                      {dgettext("default", "Conducted at")}
+                      {dgettext("default", "Shipped at")}
                     </dt>
                     <dd class="mt-0.5">
-                      {Calendar.strftime(@order.posted_at, "%Y-%m-%d %H:%M")}
+                      {Calendar.strftime(@transfer.shipped_at, "%Y-%m-%d %H:%M")}
+                    </dd>
+                  </div>
+                <% end %>
+                <%= if @transfer.received_at do %>
+                  <div>
+                    <dt class="text-base-content/60 font-medium">
+                      {dgettext("default", "Received at")}
+                    </dt>
+                    <dd class="mt-0.5">
+                      {Calendar.strftime(@transfer.received_at, "%Y-%m-%d %H:%M")}
+                    </dd>
+                  </div>
+                <% end %>
+                <%= if @transfer.cancelled_at do %>
+                  <div>
+                    <dt class="text-base-content/60 font-medium">
+                      {dgettext("default", "Cancelled at")}
+                    </dt>
+                    <dd class="mt-0.5">
+                      {Calendar.strftime(@transfer.cancelled_at, "%Y-%m-%d %H:%M")}
                     </dd>
                   </div>
                 <% end %>
                 <div>
                   <dt class="text-base-content/60 font-medium">
-                    {dgettext("default", "Warehouse (location)")}
+                    {dgettext("default", "Source warehouse")}
                   </dt>
                   <dd class="mt-0.5">
-                    <%= if @location_name do %>
-                      {@location_name}
-                    <% else %>
-                      <span class="text-base-content/40">{dgettext("default", "— not set —")}</span>
-                    <% end %>
+                    <.location_field
+                      editable?={@editable_locations? and warehouse_options?(@warehouses)}
+                      warehouses={@warehouses}
+                      selected_uuid={@transfer.source_location_uuid}
+                      location_name={@source_location_name}
+                      event="set_source_location"
+                    />
                   </dd>
                 </div>
-                <%= if @sub_order_ref do %>
-                  <div>
-                    <dt class="text-base-content/60 font-medium">{dgettext("default", "Sub-Order")}</dt>
-                    <dd class="mt-0.5">
-                      <.link
-                        navigate={@sub_order_ref.path}
-                        class="link link-primary font-mono text-sm"
-                      >
-                        {@sub_order_ref.label}
-                      </.link>
-                    </dd>
-                  </div>
-                <% end %>
-                <%= if @order.note && @posted? do %>
+                <div>
+                  <dt class="text-base-content/60 font-medium">
+                    {dgettext("default", "Destination warehouse")}
+                  </dt>
+                  <dd class="mt-0.5">
+                    <.location_field
+                      editable?={@editable_locations? and warehouse_options?(@warehouses)}
+                      warehouses={@warehouses}
+                      selected_uuid={@transfer.destination_location_uuid}
+                      location_name={@destination_location_name}
+                      event="set_destination_location"
+                    />
+                  </dd>
+                </div>
+                <%= if @transfer.note && !@draft? do %>
                   <div>
                     <dt class="text-base-content/60 font-medium">
                       {dgettext("default", "Note")}
                     </dt>
-                    <dd class="mt-0.5">{@order.note}</dd>
+                    <dd class="mt-0.5">{@transfer.note}</dd>
                   </div>
                 <% end %>
               </dl>
-              <%!-- Related documents (imported-from upstream + spawned downstream) --%>
+              <%!-- Related documents (manual links only — no downstream refs) --%>
               <RelatedDocuments.related_documents
                 upstream={@source_refs}
-                downstream={@child_supplier_order_refs ++ @child_goods_issue_refs}
-                upstream_label={dgettext("default", "Imported from")}
+                downstream={[]}
+                upstream_label={dgettext("default", "Source documents")}
                 downstream_label={dgettext("default", "Related documents")}
               />
-              <%!-- Note edit on posted doc (admin only) --%>
-              <%= if @posted? and @admin? do %>
+              <%!-- Note correction on a terminal transfer (admin only) --%>
+              <%= if @terminal? and @admin? do %>
                 <div class="divider my-1"></div>
                 <div class="text-sm">
                   <label class="text-base-content/60 font-medium block mb-1">
@@ -1038,7 +999,7 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
                   <form phx-change="set_note" phx-submit="set_note">
                     <input
                       type="text"
-                      id="io-note-posted-input"
+                      id="tr-note-posted-input"
                       name="note"
                       value={@note}
                       placeholder={dgettext("default", "Note (optional)")}
@@ -1066,12 +1027,12 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
                 </div>
               <% is_nil(@files_scope_folder_uuid) -> %>
                 <div class="alert alert-warning">
-                  {dgettext("default", "Files are not available for this internal order yet.")}
+                  {dgettext("default", "Files are not available for this transfer yet.")}
                 </div>
               <% true -> %>
                 <.live_component
                   module={PhoenixKitWeb.Components.MediaBrowser}
-                  id={"media-browser-io-#{@order_uuid}"}
+                  id={"media-browser-tr-#{@transfer_uuid}"}
                   scope_folder_id={@files_scope_folder_uuid}
                   parent_uploads={@uploads}
                   phoenix_kit_current_user={@current_user}
@@ -1087,8 +1048,8 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
           <div class="card-body p-4">
             <%= if @comments_available? do %>
               <CommentsPanel.panel
-                kind={:internal_order}
-                resource_uuid={@order_uuid}
+                kind={:transfer}
+                resource_uuid={@transfer_uuid}
                 current_user={@current_user}
                 title={dgettext("default", "Comments")}
               />
@@ -1110,34 +1071,23 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
           <div class="card-body p-4">
             <div class="flex items-center justify-between gap-2 mb-2">
               <h2 class="card-title text-base">{dgettext("default", "Items")}</h2>
-              <%= if !@posted? do %>
-                <div class="flex items-center gap-2">
-                  <button
-                    type="button"
-                    phx-click="open_source_picker"
-                    class="btn btn-outline btn-sm"
-                  >
-                    <.icon name="hero-arrow-down-tray" class="w-4 h-4" />
-                    {dgettext("default", "Import from order")}
-                  </button>
-                  <button type="button" phx-click="open_add_picker" class="btn btn-primary btn-sm">
-                    <.icon name="hero-plus" class="w-4 h-4" />
-                    {dgettext("default", "Add item")}
-                  </button>
-                </div>
+              <%= if @draft? do %>
+                <button type="button" phx-click="open_add_picker" class="btn btn-primary btn-sm">
+                  <.icon name="hero-plus" class="w-4 h-4" />
+                  {dgettext("default", "Add item")}
+                </button>
               <% end %>
             </div>
-            <.internal_order_lines_table
+            <.transfer_lines_table
               lines={@lines}
               names={@names}
-              posted?={@posted?}
-              locale={@locale}
+              editable?={!!@draft?}
             />
           </div>
         </div>
 
         <%!-- Add item modal (draft only) --%>
-        <%= if !@posted? do %>
+        <%= if @draft? do %>
           <.modal
             show={@show_add_picker_modal}
             on_close="close_add_picker"
@@ -1232,33 +1182,79 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
         <% end %>
       <% end %>
 
-      <%!-- Source picker modal: import lines from an order, or attach a manual link --%>
+      <%!-- Source picker modal: attach a manual link (no line import) --%>
       <WarehouseBrowser.source_picker
-        id="io-source-picker"
+        id="tr-source-picker"
         show={@show_source_picker}
-        title={picker_title(@picker_purpose)}
+        title={dgettext("default", "Attach a document")}
         on_close="close_source_picker"
         candidates={@source_picker_candidates}
         selected_uuids={@source_picker_selected}
         search_query={@source_picker_query}
       />
+
+      <%!-- Cancel confirmation modal (in_transit only — reverses a real posting) --%>
+      <.modal show={@show_cancel_confirm_modal} on_close="close_cancel_confirm">
+        <:title>{dgettext("default", "Cancel this transfer?")}</:title>
+        <p>
+          {dgettext(
+            "default",
+            "This will reverse the shipment and credit the quantity back to the source warehouse. This cannot be undone."
+          )}
+        </p>
+        <:actions>
+          <button type="button" phx-click="close_cancel_confirm" class="btn btn-sm">
+            {dgettext("default", "Keep transfer")}
+          </button>
+          <button type="button" phx-click="cancel" class="btn btn-error btn-sm">
+            {dgettext("default", "Cancel transfer")}
+          </button>
+        </:actions>
+      </.modal>
     </div>
     """
   end
-
-  defp picker_title(:import), do: dgettext("default", "Import from order")
-  defp picker_title(:link), do: dgettext("default", "Attach customer order")
 
   # ---------------------------------------------------------------------------
   # Function components
   # ---------------------------------------------------------------------------
 
+  attr(:editable?, :boolean, required: true)
+  attr(:warehouses, :any, required: true)
+  attr(:selected_uuid, :string, default: nil)
+  attr(:location_name, :string, default: nil)
+  attr(:event, :string, required: true)
+
+  defp location_field(assigns) do
+    ~H"""
+    <%= if @editable? do %>
+      <form phx-change={@event} phx-submit={@event}>
+        <select name="location_uuid" class="select select-sm select-bordered">
+          <option value="" selected={is_nil(@selected_uuid)}>
+            {dgettext("default", "— select —")}
+          </option>
+          <%= for warehouse <- @warehouses do %>
+            <option value={warehouse.uuid} selected={@selected_uuid == warehouse.uuid}>
+              {warehouse.name}
+            </option>
+          <% end %>
+        </select>
+      </form>
+    <% else %>
+      <%= if @location_name do %>
+        {@location_name}
+      <% else %>
+        <span class="text-base-content/40">{dgettext("default", "— not set —")}</span>
+      <% end %>
+    <% end %>
+    """
+  end
+
   attr(:lines, :list, required: true)
   attr(:names, :map, required: true)
-  attr(:posted?, :boolean, required: true)
-  attr(:locale, :string, required: true)
+  attr(:editable?, :boolean, required: true)
 
-  defp internal_order_lines_table(assigns) do
+  defp transfer_lines_table(assigns) do
     ~H"""
     <div class="overflow-x-auto">
       <table class="table table-sm">
@@ -1266,8 +1262,8 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
           <tr>
             <th>{dgettext("default", "Item")}</th>
             <th class="w-16 text-center">{dgettext("default", "Unit")}</th>
-            <th class="w-32 text-center">{dgettext("default", "Required qty")}</th>
-            <%= if !@posted? do %>
+            <th class="w-32 text-center">{dgettext("default", "Transfer qty")}</th>
+            <%= if @editable? do %>
               <th class="w-12"></th>
             <% end %>
           </tr>
@@ -1294,31 +1290,31 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
                 {WarehouseBrowser.unit_label(line["unit"])}
               </td>
               <td class="text-center">
-                <%= if @posted? do %>
-                  <span class="tabular-nums">{line["required_quantity"] || "—"}</span>
-                <% else %>
+                <%= if @editable? do %>
                   <form
-                    id={"io-qty-form-#{index}"}
-                    phx-change="set_required_qty"
-                    phx-submit="set_required_qty"
+                    id={"tr-qty-form-#{index}"}
+                    phx-change="set_transfer_qty"
+                    phx-submit="set_transfer_qty"
                   >
                     <input type="hidden" name="index" value={index} />
                     <input
                       type="number"
-                      id={"io-qty-#{index}"}
-                      name="required_quantity"
+                      id={"tr-qty-#{index}"}
+                      name="transfer_quantity"
                       min="0"
                       step="any"
-                      value={line["required_quantity"] || ""}
+                      value={line["transfer_quantity"] || ""}
                       placeholder="0"
                       class="input input-sm w-24 text-center"
                       phx-debounce="blur"
                       phx-hook="InvEnterBlur"
                     />
                   </form>
+                <% else %>
+                  <span class="tabular-nums">{line["transfer_quantity"] || "—"}</span>
                 <% end %>
               </td>
-              <%= if !@posted? do %>
+              <%= if @editable? do %>
                 <td>
                   <button
                     type="button"
@@ -1340,7 +1336,7 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
   end
 
   # ---------------------------------------------------------------------------
-  # File folder resolution
+  # File folder resolution / comments subscription
   # ---------------------------------------------------------------------------
 
   defp maybe_start_files_folder_resolution(socket) do
@@ -1353,11 +1349,11 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
 
       true ->
         lv_pid = self()
-        order = socket.assigns.order
+        transfer = socket.assigns.transfer
         user_uuid = socket.assigns.current_user && socket.assigns.current_user.uuid
 
         Task.Supervisor.start_child(PhoenixKitWarehouse.TaskSupervisor, fn ->
-          result = StorageFolders.ensure_for_internal_order(order, user_uuid)
+          result = StorageFolders.ensure_for_transfer(transfer, user_uuid)
           send(lv_pid, {:files_folder_result, result})
         end)
 
@@ -1366,18 +1362,18 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
   end
 
   defp maybe_subscribe_and_refresh_comments(socket) do
-    order = socket.assigns.order
+    transfer = socket.assigns.transfer
 
-    if connected?(socket) and order do
+    if connected?(socket) and transfer do
       socket =
         if socket.assigns.comments_subscribed? do
           socket
         else
-          Comments.subscribe(:internal_order, [order.uuid])
+          Comments.subscribe(:transfer, [transfer.uuid])
           assign(socket, :comments_subscribed?, true)
         end
 
-      count = Comments.count(:internal_order, order.uuid)
+      count = Comments.count(:transfer, transfer.uuid)
       assign(socket, :comment_count, count)
     else
       socket
@@ -1435,8 +1431,7 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
   defp focus_qty_input(socket, nil), do: socket
 
   defp focus_qty_input(socket, index) do
-    socket = push_event(socket, "inv-focus-counted", %{id: "io-qty-#{index}"})
-    socket
+    push_event(socket, "inv-focus-counted", %{id: "tr-qty-#{index}"})
   end
 
   defp add_item_to_lines(socket, item_uuid) do
@@ -1458,7 +1453,7 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
           "catalogue_uuid" => item.catalogue_uuid,
           "category_uuid" => item.category_uuid,
           "unit" => item.unit,
-          "required_quantity" => "0"
+          "transfer_quantity" => "0"
         }
 
         lines ++ [new_line]
@@ -1484,12 +1479,12 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
     end)
   end
 
-  defp ensure_saved(%PhoenixKitWarehouse.InternalOrder{status: "draft"} = order, attrs) do
-    InternalOrders.update_draft(order, attrs)
+  defp ensure_saved(%Transfer{status: "draft"} = transfer, attrs) do
+    Transfers.update_draft(transfer, attrs)
   end
 
-  defp ensure_saved(%PhoenixKitWarehouse.InternalOrder{} = order, _attrs) do
-    {:ok, order}
+  defp ensure_saved(%Transfer{} = transfer, _attrs) do
+    {:ok, transfer}
   end
 
   defp present_uuids(lines) do
@@ -1499,10 +1494,88 @@ defmodule PhoenixKitWarehouse.Web.InternalOrderFormLive do
     |> MapSet.new()
   end
 
-  defp sub_order_uuid_of(%{source_refs: refs}) do
-    Enum.find_value(refs || [], fn
-      %{"type" => "sub_order", "uuid" => uuid} -> uuid
-      _ -> nil
-    end)
+  # Parses a client-supplied line index (`phx-value-index` / a hidden form
+  # field), guarding against both a malformed value (`String.to_integer/1`
+  # would raise `ArgumentError` on a non-numeric string) and an out-of-range
+  # one — `List.delete_at/2`/`List.update_at/3` silently accept negative
+  # indices (counting from the end), so an unchecked negative index would
+  # quietly mutate the wrong line instead of failing loudly.
+  defp parse_line_index(index_str, lines) when is_binary(index_str) do
+    with {index, ""} <- Integer.parse(index_str),
+         true <- index >= 0 and index < length(lines) do
+      {:ok, index}
+    else
+      _ -> :error
+    end
   end
+
+  defp parse_line_index(_index_str, _lines), do: :error
+
+  defp update_location(socket, field, raw_uuid) do
+    uuid = blank_to_nil(raw_uuid)
+
+    case socket.assigns.transfer do
+      %Transfer{status: "draft"} = transfer ->
+        case Transfers.update_draft(transfer, %{field => uuid}) do
+          {:ok, updated} ->
+            {:noreply,
+             socket
+             |> assign(:transfer, updated)
+             |> assign(
+               :source_location_name,
+               resolve_location_name(updated.source_location_uuid)
+             )
+             |> assign(
+               :destination_location_name,
+               resolve_location_name(updated.destination_location_uuid)
+             )
+             |> put_flash(:info, dgettext("default", "Warehouse changed"))}
+
+          {:error, _changeset} ->
+            {:noreply,
+             put_flash(socket, :error, dgettext("default", "Failed to change warehouse"))}
+        end
+
+      _ ->
+        {:noreply,
+         put_flash(socket, :error, dgettext("default", "Cannot modify: document is not a draft"))}
+    end
+  end
+
+  defp blank_to_nil(nil), do: nil
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(v), do: v
+
+  # `list_warehouses/0` returns nil when the warehouse LocationType isn't
+  # configured yet, or [] when configured but empty — neither is selectable.
+  defp warehouse_options?(nil), do: false
+  defp warehouse_options?([]), do: false
+  defp warehouse_options?(_), do: true
+
+  defp status_label("draft"), do: dgettext("default", "Draft")
+  defp status_label("in_transit"), do: dgettext("default", "In transit")
+  defp status_label("done"), do: dgettext("default", "Done")
+  defp status_label("cancelled"), do: dgettext("default", "Cancelled")
+  defp status_label(other), do: other
+
+  defp status_badge_class("draft"), do: "badge-ghost"
+  defp status_badge_class("in_transit"), do: "badge-warning"
+  defp status_badge_class("done"), do: "badge-success"
+  defp status_badge_class("cancelled"), do: "badge-error"
+  defp status_badge_class(_other), do: "badge-ghost"
+
+  defp transfer_status_banner("in_transit"),
+    do:
+      dgettext(
+        "default",
+        "This transfer is in transit. Stock has left the source warehouse."
+      )
+
+  defp transfer_status_banner("done"),
+    do: dgettext("default", "This transfer has been received and is now read-only.")
+
+  defp transfer_status_banner("cancelled"),
+    do: dgettext("default", "This transfer has been cancelled.")
+
+  defp transfer_status_banner(_other), do: nil
 end

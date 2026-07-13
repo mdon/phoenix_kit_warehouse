@@ -259,4 +259,53 @@ defmodule PhoenixKitWarehouse.DocRefsTest do
                "##{p2.data["order_number"]}-#{sub2.data["sub_order_number"]}"
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # goods_receipt_refs_for_supplier_order/1 (downstream child query)
+  # ---------------------------------------------------------------------------
+
+  describe "goods_receipt_refs_for_supplier_order/1" do
+    test "returns empty list when no goods receipt references the supplier order" do
+      supplier = create_supplier!()
+      so = create_supplier_order!(supplier)
+
+      assert DocRefs.goods_receipt_refs_for_supplier_order(so.uuid) == []
+    end
+
+    test "returns refs for non-deleted goods receipts pointing at the supplier order" do
+      supplier = create_supplier!()
+      so = create_supplier_order!(supplier)
+
+      {:ok, gr} =
+        GoodsReceipts.create_goods_receipt(%{
+          supplier_uuid: supplier.uuid,
+          supplier_order_uuid: so.uuid,
+          location_uuid: @default_location,
+          lines: []
+        })
+
+      refs = DocRefs.goods_receipt_refs_for_supplier_order(so.uuid)
+
+      assert [ref] = refs
+      assert ref.label == "#GR-#{gr.number}"
+      assert ref.kind == :goods_receipt
+      assert String.contains?(ref.path, "/goods-receipts/#{gr.uuid}")
+    end
+
+    test "ignores goods receipts belonging to a different supplier order" do
+      supplier = create_supplier!()
+      so1 = create_supplier_order!(supplier)
+      so2 = create_supplier_order!(supplier)
+
+      {:ok, _gr} =
+        GoodsReceipts.create_goods_receipt(%{
+          supplier_uuid: supplier.uuid,
+          supplier_order_uuid: so2.uuid,
+          location_uuid: @default_location,
+          lines: []
+        })
+
+      assert DocRefs.goods_receipt_refs_for_supplier_order(so1.uuid) == []
+    end
+  end
 end

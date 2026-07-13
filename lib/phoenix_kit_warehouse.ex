@@ -1,14 +1,16 @@
 defmodule PhoenixKitWarehouse do
   @moduledoc """
-  PhoenixKit module: stock, stocktakes, internal orders, supplier orders,
-  goods receipt, and goods issue.
+  PhoenixKit module: multi-warehouse stock scope, stocktakes, transfers with
+  cancel reverse-posting, deficit control with min-stock settings, turnover
+  report, internal orders, supplier orders, goods receipts, and goods issues.
 
   Hard-depends on `phoenix_kit_catalogue` (warehouse only ever tracks
-  catalogue items) and `phoenix_kit_locations` (every document carries a
-  `location_uuid` resolved through it) — see `required_modules/0`.
+  catalogue items), `phoenix_kit_locations` (every document carries a
+  `location_uuid` resolved through it), and `phoenix_kit_billing` (currency
+  formatting for unit values) — see `required_modules/0` and `mix.exs`.
 
   `PhoenixKitComments` stays optional (guarded via `Code.ensure_loaded?/1`
-  in the document context modules — see Plan 3).
+  in the document context modules).
 
   Documents link to host-owned records (a sub-order, a top-level order, or
   anything else a consuming app wants to link) through the generic
@@ -32,6 +34,9 @@ defmodule PhoenixKitWarehouse do
   alias PhoenixKitWarehouse.Web.SettingsLive
   alias PhoenixKitWarehouse.Web.SupplierOrderFormLive
   alias PhoenixKitWarehouse.Web.SupplierOrderIndexLive
+  alias PhoenixKitWarehouse.Web.TransferFormLive
+  alias PhoenixKitWarehouse.Web.TransferIndexLive
+  alias PhoenixKitWarehouse.Web.TurnoverReportLive
 
   @version Mix.Project.config()[:version]
 
@@ -202,6 +207,34 @@ defmodule PhoenixKitWarehouse do
         permission: module_key(),
         group: :admin_main,
         live_view: {GoodsIssueIndexLive, :index}
+      },
+      %Tab{
+        id: :warehouse_transfers,
+        label: "Transfers",
+        gettext_backend: PhoenixKitWarehouse.Gettext,
+        gettext_domain: "default",
+        icon: "hero-arrows-right-left",
+        path: "warehouse/transfers",
+        parent: :warehouse,
+        priority: 160,
+        level: :admin,
+        permission: module_key(),
+        group: :admin_main,
+        live_view: {TransferIndexLive, :index}
+      },
+      %Tab{
+        id: :warehouse_turnover,
+        label: "Turnover",
+        gettext_backend: PhoenixKitWarehouse.Gettext,
+        gettext_domain: "default",
+        icon: "hero-chart-bar",
+        path: "warehouse/turnover",
+        parent: :warehouse,
+        priority: 161,
+        level: :admin,
+        permission: module_key(),
+        group: :admin_main,
+        live_view: {TurnoverReportLive, :index}
       }
     ] ++ hidden_crud_tabs()
   end
@@ -485,6 +518,61 @@ defmodule PhoenixKitWarehouse do
         permission: module_key(),
         visible: false,
         live_view: {GoodsIssueFormLive, :comments}
+      },
+      %Tab{
+        id: :warehouse_transfer_new,
+        label: "New Transfer",
+        path: "warehouse/transfers/new",
+        parent: :warehouse,
+        priority: 611,
+        level: :admin,
+        permission: module_key(),
+        visible: false,
+        live_view: {TransferFormLive, :new}
+      },
+      %Tab{
+        id: :warehouse_transfer_edit,
+        label: "Edit Transfer",
+        path: "warehouse/transfers/:uuid",
+        parent: :warehouse,
+        priority: 612,
+        level: :admin,
+        permission: module_key(),
+        visible: false,
+        live_view: {TransferFormLive, :edit}
+      },
+      %Tab{
+        id: :warehouse_transfer_items,
+        label: "Transfer Items",
+        path: "warehouse/transfers/:uuid/items",
+        parent: :warehouse,
+        priority: 613,
+        level: :admin,
+        permission: module_key(),
+        visible: false,
+        live_view: {TransferFormLive, :items}
+      },
+      %Tab{
+        id: :warehouse_transfer_files,
+        label: "Transfer Files",
+        path: "warehouse/transfers/:uuid/files",
+        parent: :warehouse,
+        priority: 614,
+        level: :admin,
+        permission: module_key(),
+        visible: false,
+        live_view: {TransferFormLive, :files}
+      },
+      %Tab{
+        id: :warehouse_transfer_comments,
+        label: "Transfer Comments",
+        path: "warehouse/transfers/:uuid/comments",
+        parent: :warehouse,
+        priority: 615,
+        level: :admin,
+        permission: module_key(),
+        visible: false,
+        live_view: {TransferFormLive, :comments}
       }
     ]
   end
