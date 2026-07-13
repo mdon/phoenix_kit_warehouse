@@ -289,20 +289,26 @@ defmodule PhoenixKitWarehouse.Transfers do
   # (`StockLedger.issue_quantity/3` for shipping, `receive_quantity/3` for
   # receiving and for cancel's source credit-back).
   defp apply_lines(lines, stock_map, audit_key, mover) do
-    Enum.reduce_while(lines, {:ok, []}, fn line, {:ok, acc} ->
-      item_uuid = line["item_uuid"]
-      qty = StockLedger.to_decimal(line["transfer_quantity"])
+    result =
+      Enum.reduce_while(lines, {:ok, []}, fn line, {:ok, acc} ->
+        item_uuid = line["item_uuid"]
+        qty = StockLedger.to_decimal(line["transfer_quantity"])
 
-      prior = Map.get(stock_map, item_uuid)
-      previous_quantity = if prior, do: prior.quantity, else: Decimal.new("0")
-      audited_line = Map.put(line, audit_key, previous_quantity)
+        prior = Map.get(stock_map, item_uuid)
+        previous_quantity = if prior, do: prior.quantity, else: Decimal.new("0")
+        audited_line = Map.put(line, audit_key, previous_quantity)
 
-      case maybe_move(mover, item_uuid, qty) do
-        :skip -> {:cont, {:ok, acc ++ [audited_line]}}
-        {:ok, _} -> {:cont, {:ok, acc ++ [audited_line]}}
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
+        case maybe_move(mover, item_uuid, qty) do
+          :skip -> {:cont, {:ok, [audited_line | acc]}}
+          {:ok, _} -> {:cont, {:ok, [audited_line | acc]}}
+          {:error, reason} -> {:halt, {:error, reason}}
+        end
+      end)
+
+    case result do
+      {:ok, reversed} -> {:ok, Enum.reverse(reversed)}
+      error -> error
+    end
   end
 
   defp maybe_move(mover, item_uuid, qty) do

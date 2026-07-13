@@ -286,29 +286,27 @@ defmodule PhoenixKitWarehouse.StockLedger do
     location_uuid = Keyword.get(opts, :location_uuid) || default_location_uuid()
 
     qty_d = to_decimal(quantity)
-    item_uuid_bin = Ecto.UUID.dump!(item_uuid)
-    location_uuid_bin = if location_uuid, do: Ecto.UUID.dump!(location_uuid)
 
-    result =
-      target_repo.query(
-        """
-        UPDATE phoenix_kit_warehouse_stock
-        SET quantity = quantity - $1, updated_at = NOW()
-        WHERE item_uuid = $2 AND location_uuid = $3 AND quantity >= $1
-        RETURNING quantity
-        """,
-        [qty_d, item_uuid_bin, location_uuid_bin]
+    query =
+      from(s in Stock,
+        where:
+          s.item_uuid == ^item_uuid and
+            s.location_uuid == ^location_uuid and
+            s.quantity >= ^qty_d,
+        update: [
+          set: [
+            quantity: fragment("? - ?", s.quantity, ^qty_d),
+            updated_at: ^(DateTime.utc_now() |> DateTime.truncate(:second))
+          ]
+        ]
       )
 
-    case result do
-      {:ok, %{rows: [[new_qty]]}} ->
-        {:ok, to_decimal(new_qty)}
-
-      {:ok, %{rows: []}} ->
+    case target_repo.update_all(query, [], returning: [:quantity]) do
+      {0, _} ->
         {:error, {:insufficient_stock, item_uuid}}
 
-      {:error, reason} ->
-        {:error, reason}
+      {_n, [%Stock{quantity: new_qty} | _]} ->
+        {:ok, to_decimal(new_qty)}
     end
   end
 
