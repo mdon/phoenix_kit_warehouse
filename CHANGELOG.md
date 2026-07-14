@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.1 - 2026-07-14
+
+### Fixed
+
+- **Stale `V143` migration references renumbered to `V144`** (PR #4). When core's
+  consolidation PR merged, the migration creating `phoenix_kit_warehouse_transfers`
+  and `phoenix_kit_warehouse_min_stock` was renumbered upstream — core's own V143
+  slot went to the new-login-security-alerts migration instead. Every `V143`
+  reference in this package (`AGENTS.md`, `min_stock_settings.ex` moduledoc,
+  `mix.exs` comments) now points to `V144`, and the `phoenix_kit` dependency pin is
+  tightened to `~> 1.7.190` (1.7.189 tops out at V142 and does not carry the
+  tables).
+- **This CHANGELOG's own 0.2.0 entry still referenced `V143`/`>= 1.7.189` after
+  PR #4 landed** — corrected post-release as part of reviewing that PR (see
+  `dev_docs/pull_requests/2026/4-v144-renumber-and-pin/CLAUDE_REVIEW.md`).
+
 ## 0.2.0 - 2026-07-13
 
 Wave 1: multi-warehouse, transfers, deficit control, turnover.
@@ -26,7 +42,7 @@ Wave 1: multi-warehouse, transfers, deficit control, turnover.
 - **Related documents**: a shared upstream/downstream linked-documents
   list component on Internal Order / Supplier Order cards.
 - `Transfer`/`MinStock` tables now ship in core `phoenix_kit`'s migration
-  V143+ instead of this package's own migrator (which is retired); this
+  V144 instead of this package's own migrator (which is retired); this
   package defines schemas only and owns no DDL.
 
 ### Fixed
@@ -49,9 +65,10 @@ Wave 1: multi-warehouse, transfers, deficit control, turnover.
 
 ### Requires
 
-- `phoenix_kit >= 1.7.189` — `Transfer`/`MinStock` tables ship in core
-  migration V143 (subsequently renumbered upstream; any published core
-  release ≥ 1.7.189 satisfies this pin).
+- `phoenix_kit >= 1.7.190` — `Transfer`/`MinStock` tables ship in core
+  migration V144 (renumbered from a provisional V143 before publish;
+  1.7.189 tops out at V142, so it does *not* satisfy this pin — corrected
+  post-release, see PR #4).
 
 ## 0.1.0 - 2026-07-10
 
