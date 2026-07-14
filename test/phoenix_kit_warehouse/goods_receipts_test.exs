@@ -878,6 +878,97 @@ defmodule PhoenixKitWarehouse.GoodsReceiptsTest do
   end
 
   # ---------------------------------------------------------------------------
+  # post_goods_receipt/2 — unit_value wiring (Q4)
+  # ---------------------------------------------------------------------------
+
+  describe "post_goods_receipt/2 — unit_value" do
+    test "posting a receipt with unit_value writes it to stock" do
+      actor = user_uuid()
+      item_uuid = Ecto.UUID.generate()
+
+      line = %{
+        "item_uuid" => item_uuid,
+        "name" => "Widget",
+        "sku" => "WGT-001",
+        "unit" => "piece",
+        "catalogue_uuid" => Ecto.UUID.generate(),
+        "ordered_quantity" => Decimal.new("10"),
+        "received_quantity" => Decimal.new("5"),
+        "unit_value" => "12.50"
+      }
+
+      receipt = create_draft!(%{lines: [line]})
+      {:ok, _posted} = GoodsReceipts.post_goods_receipt(receipt, actor)
+
+      stock =
+        Repo.get_by(PhoenixKitWarehouse.Stock,
+          item_uuid: item_uuid,
+          location_uuid: @default_location_uuid
+        )
+
+      assert stock != nil
+      assert Decimal.equal?(stock.unit_value, Decimal.new("12.50"))
+    end
+
+    test "posting a receipt without unit_value leaves existing stock.unit_value untouched" do
+      actor = user_uuid()
+      item_uuid = Ecto.UUID.generate()
+
+      # Establish initial stock with a known unit_value.
+      {:ok, _} =
+        Warehouse.receive_quantity(item_uuid, Decimal.new("10"),
+          unit_value: Decimal.new("5.00"),
+          location_uuid: @default_location_uuid
+        )
+
+      # Post a receipt with no unit_value on the line.
+      line = sample_gr_line(item_uuid, received: "3")
+      receipt = create_draft!(%{lines: [line]})
+      {:ok, _posted} = GoodsReceipts.post_goods_receipt(receipt, actor)
+
+      stock =
+        Repo.get_by(PhoenixKitWarehouse.Stock,
+          item_uuid: item_uuid,
+          location_uuid: @default_location_uuid
+        )
+
+      # unit_value must be preserved from the first receive.
+      assert Decimal.equal?(stock.unit_value, Decimal.new("5.00"))
+    end
+
+    test "last posted receipt wins unit_value" do
+      actor = user_uuid()
+      item_uuid = Ecto.UUID.generate()
+
+      line_a = %{
+        "item_uuid" => item_uuid,
+        "name" => "Widget",
+        "sku" => "WGT-001",
+        "unit" => "piece",
+        "catalogue_uuid" => Ecto.UUID.generate(),
+        "ordered_quantity" => Decimal.new("5"),
+        "received_quantity" => Decimal.new("5"),
+        "unit_value" => "10.00"
+      }
+
+      receipt_a = create_draft!(%{lines: [line_a]})
+      {:ok, _} = GoodsReceipts.post_goods_receipt(receipt_a, actor)
+
+      line_b = Map.put(line_a, "unit_value", "20.00")
+      receipt_b = create_draft!(%{lines: [line_b]})
+      {:ok, _} = GoodsReceipts.post_goods_receipt(receipt_b, actor)
+
+      stock =
+        Repo.get_by(PhoenixKitWarehouse.Stock,
+          item_uuid: item_uuid,
+          location_uuid: @default_location_uuid
+        )
+
+      assert Decimal.equal?(stock.unit_value, Decimal.new("20.00"))
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # soft_delete/2
   # ---------------------------------------------------------------------------
 

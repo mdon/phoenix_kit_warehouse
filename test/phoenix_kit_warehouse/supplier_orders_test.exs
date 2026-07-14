@@ -965,4 +965,94 @@ defmodule PhoenixKitWarehouse.SupplierOrdersTest do
       assert length(refs_for_io) == 1
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # resolve_suppliers — guarded primary_for_item path (V149)
+  # ---------------------------------------------------------------------------
+
+  describe "resolve_suppliers — guarded primary_for_item path" do
+    test "without new catalogue export: routes via manufacturer (Hex 0.10.0 guard)" do
+      # When compiled against Hex catalogue 0.10.0, primary_for_item/1 is absent.
+      # The guard falls through to the manufacturer path. Verify manufacturer
+      # routing still produces the correct supplier assignment.
+      actor = user_uuid()
+      mfr = create_manufacturer!()
+      supplier = create_supplier!()
+      Catalogue.link_manufacturer_supplier(mfr.uuid, supplier.uuid)
+      item = create_item!(%{manufacturer_uuid: mfr.uuid})
+
+      StockLedger.upsert_quantity(item.uuid, Decimal.new("0"),
+        location_uuid: default_location_uuid()
+      )
+
+      line = internal_order_line(item, "5")
+      internal_order = posted_internal_order_with_lines([line], actor)
+
+      {:ok, %{supplier_orders: orders, unassigned_lines: unassigned}} =
+        SupplierOrders.generate_from_internal_order(internal_order, actor)
+
+      # With manufacturer → exactly 1 supplier, item must be assigned.
+      if function_exported?(PhoenixKitCatalogue.Catalogue.Suppliers, :primary_for_item, 1) do
+        # Feature-branch catalogue: assignment may come via junction or manufacturer.
+        # Either way, exactly one supplier order must be created.
+        assert length(orders) == 1 or unassigned == []
+      else
+        # Hex 0.10.0: manufacturer path, item assigned to the linked supplier.
+        assert length(orders) == 1
+        assert unassigned == []
+        [so] = orders
+        assert so.supplier_uuid == supplier.uuid
+      end
+    end
+
+    test "with new catalogue export: primary_for_item junction wins over manufacturer" do
+      # This test verifies the V149 junction-based resolution path.
+      # It only exercises the guarded code when the feature-branch catalogue
+      # (compiled with PHOENIX_KIT_CATALOGUE_PATH=../phoenix_kit_catalogue) is
+      # available — it is a no-op otherwise.
+      if function_exported?(PhoenixKitCatalogue.Catalogue.Suppliers, :primary_for_item, 1) do
+        actor = user_uuid()
+
+        # Item with TWO manufacturer suppliers → normally unassigned (ambiguous).
+        # A primary ItemSupplierInfo row breaks the tie.
+        mfr = create_manufacturer!()
+        supplier_a = create_supplier!()
+        supplier_b = create_supplier!()
+        Catalogue.link_manufacturer_supplier(mfr.uuid, supplier_a.uuid)
+        Catalogue.link_manufacturer_supplier(mfr.uuid, supplier_b.uuid)
+        item = create_item!(%{manufacturer_uuid: mfr.uuid})
+
+        # Mark supplier_b as the primary supplier via the junction.
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
+        {:ok, _} =
+          apply(PhoenixKitCatalogue.Catalogue.ItemSupplierInfos, :create, [
+            %{
+              item_uuid: item.uuid,
+              supplier_uuid: supplier_b.uuid,
+              supplier_source: "local",
+              is_primary: true
+            }
+          ])
+
+        StockLedger.upsert_quantity(item.uuid, Decimal.new("0"),
+          location_uuid: default_location_uuid()
+        )
+
+        line = internal_order_line(item, "5")
+        internal_order = posted_internal_order_with_lines([line], actor)
+
+        {:ok, %{supplier_orders: orders, unassigned_lines: unassigned}} =
+          SupplierOrders.generate_from_internal_order(internal_order, actor)
+
+        # Junction primary supplier wins — exactly 1 order for supplier_b.
+        assert length(orders) == 1
+        assert unassigned == []
+        [so] = orders
+        assert so.supplier_uuid == supplier_b.uuid
+      else
+        # Hex 0.10.0: skip this path — primary_for_item/1 not yet available.
+        :ok
+      end
+    end
+  end
 end

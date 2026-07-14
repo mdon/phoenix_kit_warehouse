@@ -648,27 +648,42 @@ defmodule PhoenixKitWarehouse.SupplierOrders do
     end)
   end
 
-  # Resolves the list of linked suppliers for an item's manufacturer.
-  # Returns [] when item has no manufacturer_uuid.
-  # An explicit primary supplier on the item always wins — it's how we
-  # resolve generic/unbranded materials that have no manufacturer to
-  # mediate through, and how we break ties when a manufacturer has more
-  # than one linked supplier.
-  defp resolve_suppliers(%{primary_supplier_uuid: primary_supplier_uuid})
-       when not is_nil(primary_supplier_uuid) do
-    case Catalogue.get_supplier(primary_supplier_uuid) do
-      nil -> []
-      supplier -> [supplier]
+  # Resolves the list of linked suppliers for an item.
+  # Returns [] when no supplier can be determined unambiguously.
+  #
+  # Resolution order:
+  # 1. If the catalogue exports `Suppliers.primary_for_item/1` (V149+), check
+  #    the item_supplier_info junction for a primary row. Non-nil wins.
+  # 2. Fallback: manufacturer → exactly-one linked supplier wins.
+  #
+  # The `primary_supplier_uuid` scalar was removed in V149. The guarded path
+  # keeps this function backward-compatible with older catalogue releases that
+  # still lack `primary_for_item/1`.
+  defp resolve_suppliers(item) do
+    if function_exported?(PhoenixKitCatalogue.Catalogue.Suppliers, :primary_for_item, 1) do
+      # credo:disable-for-next-line Credo.Check.Refactor.Apply
+      case apply(PhoenixKitCatalogue.Catalogue.Suppliers, :primary_for_item, [item.uuid]) do
+        nil ->
+          resolve_via_manufacturer(item)
+
+        %{supplier_uuid: supplier_uuid} ->
+          case Catalogue.get_supplier(supplier_uuid) do
+            nil -> []
+            supplier -> [supplier]
+          end
+      end
+    else
+      resolve_via_manufacturer(item)
     end
   end
 
-  defp resolve_suppliers(%{manufacturer_uuid: nil}), do: []
+  defp resolve_via_manufacturer(%{manufacturer_uuid: nil}), do: []
 
-  defp resolve_suppliers(%{manufacturer_uuid: manufacturer_uuid}) do
+  defp resolve_via_manufacturer(%{manufacturer_uuid: manufacturer_uuid}) do
     Catalogue.list_suppliers_for_manufacturer(manufacturer_uuid)
   end
 
-  defp resolve_suppliers(_item), do: []
+  defp resolve_via_manufacturer(_item), do: []
 
   # Returns on-hand quantity as Decimal for a given item_uuid.
   # Each internal order may target a different warehouse, so on-hand

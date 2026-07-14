@@ -6,6 +6,15 @@ defmodule PhoenixKitWarehouse.GoodsReceipts do
   INCREASES warehouse stock when posted. There is NO repost — posting a goods
   receipt is an additive delta operation. Correction after posting is limited
   to note and storage_folder only.
+
+  ## unit_value
+
+  Each receipt line may carry a `"unit_value"` field (string, number, or
+  Decimal). When present and non-nil, posting the receipt writes that value
+  into `phoenix_kit_warehouse_stock.unit_value` for the corresponding item/
+  location via `StockLedger.receive_quantity/3`. The last posted receipt wins
+  — earlier values are overwritten. When `"unit_value"` is absent or `nil` the
+  existing stock unit_value is left untouched.
   """
 
   import Ecto.Query
@@ -410,12 +419,13 @@ defmodule PhoenixKitWarehouse.GoodsReceipts do
     Enum.reduce_while(lines, {:ok, []}, fn line, {:ok, acc} ->
       item_uuid = line["item_uuid"]
       received_qty = StockLedger.to_decimal(line["received_quantity"])
+      unit_value = StockLedger.to_decimal_or_nil(line["unit_value"])
 
       prior = Map.get(stock_map, item_uuid)
       previous_quantity = if prior, do: prior.quantity, else: Decimal.new("0")
       audited_line = Map.put(line, "previous_quantity", previous_quantity)
 
-      case maybe_receive(item_uuid, received_qty, location_uuid, repo) do
+      case maybe_receive(item_uuid, received_qty, unit_value, location_uuid, repo) do
         :skip -> {:cont, {:ok, acc ++ [audited_line]}}
         {:ok, _stock} -> {:cont, {:ok, acc ++ [audited_line]}}
         {:error, reason} -> {:halt, {:error, reason}}
@@ -423,11 +433,12 @@ defmodule PhoenixKitWarehouse.GoodsReceipts do
     end)
   end
 
-  defp maybe_receive(item_uuid, received_qty, location_uuid, repo) do
+  defp maybe_receive(item_uuid, received_qty, unit_value, location_uuid, repo) do
     if Decimal.equal?(received_qty, Decimal.new("0")) do
       :skip
     else
       StockLedger.receive_quantity(item_uuid, received_qty,
+        unit_value: unit_value,
         location_uuid: location_uuid,
         repo: repo
       )
