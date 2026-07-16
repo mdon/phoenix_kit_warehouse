@@ -652,15 +652,23 @@ defmodule PhoenixKitWarehouse.SupplierOrders do
 
   # Resolves the list of linked suppliers for an item's manufacturer.
   # Returns [] when item has no manufacturer_uuid.
-  # An explicit primary supplier on the item always wins — it's how we
-  # resolve generic/unbranded materials that have no manufacturer to
-  # mediate through, and how we break ties when a manufacturer has more
-  # than one linked supplier. `primary_supplier_uuid` is a V146 scalar FK
-  # on the item — V149 only adds an *additional* per-supplier pricing
-  # junction (`phoenix_kit_cat_item_supplier_info`) alongside it and does
-  # not remove or supersede this field (see V149's moduledoc — that
-  # junction has no "primary" row of its own; the scalar stays the source
-  # of truth for the item's default supplier).
+  #
+  # An explicit primary supplier on the item is meant to always win — it's
+  # how we'd resolve generic/unbranded materials that have no manufacturer
+  # to mediate through, and how we'd break ties when a manufacturer has
+  # more than one linked supplier. In practice neither mechanism below is
+  # live yet: `phoenix_kit_catalogue` 0.10.0 (the latest published on Hex,
+  # and what this repo's mix.lock pins) defines neither the
+  # `primary_supplier_uuid` scalar (verified absent from
+  # `deps/phoenix_kit_catalogue/lib/phoenix_kit_catalogue/schemas/item.ex`)
+  # nor `Suppliers.primary_for_item/1` (verified absent from
+  # `deps/phoenix_kit_catalogue/lib/phoenix_kit_catalogue/catalogue/
+  # suppliers.ex`) — both landed only in catalogue's unreleased
+  # `feature/parties-supplier-info` branch (merged to catalogue's `main`
+  # 2026-07-15, not yet Hex-published). Until catalogue cuts that release
+  # and this repo's `mix.lock` picks it up, both clauses below are dead and
+  # every item resolves purely via `resolve_via_manufacturer/1` — including
+  # the generic/unbranded and tie-break cases this comment describes.
   defp resolve_suppliers(%{primary_supplier_uuid: primary_supplier_uuid})
        when not is_nil(primary_supplier_uuid) do
     case Catalogue.get_supplier(primary_supplier_uuid) do
@@ -669,11 +677,11 @@ defmodule PhoenixKitWarehouse.SupplierOrders do
     end
   end
 
-  # Junction-primary path: the catalogue Item schema no longer maps the V146
-  # scalar (removed in catalogue PR #44), so the scalar head above can only
-  # match if a future catalogue release restores the field — it is kept for
-  # that case. The working default-supplier mechanism is the V151 junction
-  # `is_primary` row via `Suppliers.primary_for_item/1`.
+  # Junction-primary path: once catalogue publishes the release carrying
+  # `Suppliers.primary_for_item/1` (see the note above) and this repo's
+  # `mix.lock` is bumped to it, this clause becomes the working
+  # default-supplier mechanism (a V151 junction `is_primary` row) — no code
+  # change needed here, the guard below activates automatically.
   #
   # `Code.ensure_loaded?/1` is required before `function_exported?/3`: in a
   # release the Suppliers module loads lazily and nothing else on this path

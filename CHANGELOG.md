@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.3 - 2026-07-16
+
+### Changed
+
+- **`resolve_suppliers/1` gained a guarded junction-primary fallback clause**
+  (PR #6), sitting between the `primary_supplier_uuid` scalar check and
+  manufacturer resolution: a `Code.ensure_loaded?`/`function_exported?`-guarded
+  call to `PhoenixKitCatalogue.Catalogue.Suppliers.primary_for_item/1` (the
+  catalogue V151 junction `is_primary` row), falling back to manufacturer
+  resolution (with a warning) when the primary row's supplier isn't locally
+  resolvable. The guard is correctly written — no crash risk against a
+  dependency that doesn't export the function.
+
+### Fixed (review of PR #6)
+
+- **Neither `resolve_suppliers/1` non-manufacturer clause is actually reachable
+  against the currently pinned `phoenix_kit_catalogue ~> 0.10` dependency** —
+  corrected during review, not a new bug from this PR. `phoenix_kit_catalogue`
+  0.10.0 (still Hex's latest as of this release) never shipped
+  `primary_supplier_uuid` *or* `Suppliers.primary_for_item/1`: both were added
+  and (in the scalar's case) removed entirely in catalogue commits *after*
+  0.10.0 was tagged, and remain unpublished. This also means the 0.2.2
+  changelog entry below and PR #5's review overstated the scalar's status —
+  it was never live in any published catalogue release, not just removed by a
+  later one. `resolve_suppliers/1` today is functionally equivalent to
+  manufacturer-only resolution for every item. Rewrote the misleading code
+  comments to state this plainly (with the mechanism activating automatically,
+  no code change needed, once catalogue publishes the junction release and
+  this repo's `mix.lock` picks it up), and replaced two pre-existing tests
+  that asserted unreachable scalar-based behavior (and would have failed
+  against the real dependency) with tests that lock in the real,
+  currently-shipping fallback behavior. Full findings:
+  `dev_docs/pull_requests/2026/6-junction-primary-fallback/CLAUDE_REVIEW.md`.
+
+### Notes
+
+- **Dependency lockfile advance** (no `mix.exs` constraint change):
+  `hackney` 4.5.2 → 4.6.0.
+
 ## 0.2.2 - 2026-07-14
 
 ### Added

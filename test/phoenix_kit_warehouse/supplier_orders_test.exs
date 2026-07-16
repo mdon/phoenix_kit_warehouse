@@ -967,13 +967,27 @@ defmodule PhoenixKitWarehouse.SupplierOrdersTest do
   end
 
   # ---------------------------------------------------------------------------
-  # resolve_suppliers — primary_supplier_uuid scalar
+  # resolve_suppliers — current fallback behavior (catalogue 0.10.0, no
+  # primary-supplier support published yet)
   # ---------------------------------------------------------------------------
+  #
+  # `phoenix_kit_catalogue` 0.10.0 (this repo's pinned Hex version) defines
+  # neither the `primary_supplier_uuid` scalar nor
+  # `Suppliers.primary_for_item/1` — see the comments on `resolve_suppliers/1`
+  # in lib/phoenix_kit_warehouse/supplier_orders.ex. Both of its non-manufacturer
+  # clauses are therefore unreachable against the real dependency today, and
+  # every item falls through to `resolve_via_manufacturer/1`. These tests lock
+  # in that real, currently-shipping behavior — including its known gaps — so
+  # a future catalogue release (which activates the dead clauses without a
+  # code change here) is the thing that should change these assertions, not a
+  # regression.
 
-  describe "resolve_suppliers — primary_supplier_uuid scalar" do
-    test "primary supplier wins for a generic/unbranded item with no manufacturer" do
+  describe "resolve_suppliers — no primary-supplier support (current dependency)" do
+    test "a generic/unbranded item with no manufacturer has no resolvable supplier and lands unassigned" do
       actor = user_uuid()
       supplier = create_supplier!()
+      # `primary_supplier_uuid` isn't a field on the pinned catalogue's Item
+      # schema — passing it here is silently dropped by Ecto.Changeset.cast/4.
       item = create_item!(%{primary_supplier_uuid: supplier.uuid})
 
       StockLedger.upsert_quantity(item.uuid, Decimal.new("0"),
@@ -986,13 +1000,11 @@ defmodule PhoenixKitWarehouse.SupplierOrdersTest do
       {:ok, %{supplier_orders: orders, unassigned_lines: unassigned}} =
         SupplierOrders.generate_from_internal_order(internal_order, actor)
 
-      assert length(orders) == 1
-      assert unassigned == []
-      [so] = orders
-      assert so.supplier_uuid == supplier.uuid
+      assert orders == []
+      assert length(unassigned) == 1
     end
 
-    test "primary supplier breaks the tie when the manufacturer has more than one linked supplier" do
+    test "a manufacturer with more than one linked supplier is ambiguous and lands unassigned" do
       actor = user_uuid()
       mfr = create_manufacturer!()
       supplier_a = create_supplier!()
@@ -1000,6 +1012,9 @@ defmodule PhoenixKitWarehouse.SupplierOrdersTest do
       Catalogue.link_manufacturer_supplier(mfr.uuid, supplier_a.uuid)
       Catalogue.link_manufacturer_supplier(mfr.uuid, supplier_b.uuid)
 
+      # `primary_supplier_uuid` isn't a field on the pinned catalogue's Item
+      # schema — passing it here is silently dropped by Ecto.Changeset.cast/4,
+      # so there is no way to break the manufacturer/supplier tie today.
       item =
         create_item!(%{manufacturer_uuid: mfr.uuid, primary_supplier_uuid: supplier_b.uuid})
 
@@ -1013,10 +1028,31 @@ defmodule PhoenixKitWarehouse.SupplierOrdersTest do
       {:ok, %{supplier_orders: orders, unassigned_lines: unassigned}} =
         SupplierOrders.generate_from_internal_order(internal_order, actor)
 
-      assert length(orders) == 1
+      assert orders == []
+      assert length(unassigned) == 1
+    end
+
+    test "an item routed through resolve_suppliers/1's junction guard falls back to manufacturer resolution without crashing" do
+      actor = user_uuid()
+      mfr = create_manufacturer!()
+      supplier = create_supplier!()
+      Catalogue.link_manufacturer_supplier(mfr.uuid, supplier.uuid)
+
+      item = create_item!(%{manufacturer_uuid: mfr.uuid})
+
+      StockLedger.upsert_quantity(item.uuid, Decimal.new("0"),
+        location_uuid: default_location_uuid()
+      )
+
+      line = internal_order_line(item, "5")
+      internal_order = posted_internal_order_with_lines([line], actor)
+
+      {:ok, %{supplier_orders: orders, unassigned_lines: unassigned}} =
+        SupplierOrders.generate_from_internal_order(internal_order, actor)
+
       assert unassigned == []
       [so] = orders
-      assert so.supplier_uuid == supplier_b.uuid
+      assert so.supplier_uuid == supplier.uuid
     end
   end
 end
