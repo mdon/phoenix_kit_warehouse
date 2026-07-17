@@ -60,6 +60,11 @@ msgstr "После добавления:"
 msgid "All columns selected"
 msgstr "Все колонки выбраны"
 
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:726
+#, elixir-autogen, elixir-format
+msgid "All prices updated"
+msgstr "Все цены обновлены"
+
 #: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:283
 #, elixir-autogen, elixir-format
 msgid "All quantities set to ordered"
@@ -156,6 +161,11 @@ msgstr "Каталог"
 #, elixir-autogen, elixir-format
 msgid "Catalogue base price"
 msgstr "Базовая цена каталога"
+
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:687
+#, elixir-autogen, elixir-format
+msgid "Catalogue module not available"
+msgstr "Модуль каталога недоступен"
 
 #: lib/phoenix_kit_warehouse/column_config/stock.ex:54
 #, elixir-autogen, elixir-format
@@ -282,6 +292,11 @@ msgstr "Создан"
 #, elixir-autogen, elixir-format
 msgid "Creator"
 msgstr "Создатель"
+
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:1313
+#, elixir-autogen, elixir-format
+msgid "Current cost"
+msgstr "Текущая цена закупки"
 
 #: lib/phoenix_kit_warehouse/web/components/warehouse_browser.ex:117
 #: lib/phoenix_kit_warehouse/web/components/warehouse_browser.ex:520
@@ -547,6 +562,11 @@ msgstr "Не удалось обновить"
 #, elixir-autogen, elixir-format
 msgid "Failed to update quantities"
 msgstr "Не удалось обновить количества"
+
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:690
+#, elixir-autogen, elixir-format
+msgid "Failed to update price"
+msgstr "Не удалось обновить цену"
 
 #: lib/phoenix_kit_warehouse/web/goods_issue_form_live.ex:677
 #: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:707
@@ -1113,6 +1133,16 @@ msgstr "Дата проведения"
 msgid "Prior stock"
 msgstr "Прежний остаток"
 
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:683
+#, elixir-autogen, elixir-format
+msgid "Price updated"
+msgstr "Цена обновлена"
+
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:1295
+#, elixir-autogen, elixir-format
+msgid "Purchase price proposals"
+msgstr "Предложения по закупочным ценам"
+
 #: lib/phoenix_kit_warehouse/web/inventory_form_live.ex:812
 #, elixir-autogen, elixir-format
 msgid "Re-conduct"
@@ -1122,6 +1152,11 @@ msgstr "Перепровести"
 #, elixir-autogen, elixir-format
 msgid "Receipt Lines"
 msgstr "Строки поступления"
+
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:1314
+#, elixir-autogen, elixir-format
+msgid "Receipt price"
+msgstr "Цена по поступлению"
 
 #: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:896
 #, elixir-autogen, elixir-format
@@ -1429,6 +1464,16 @@ msgstr "Учётная стоимость ед."
 #, elixir-autogen, elixir-format
 msgid "Unsupported filter type"
 msgstr "Неподдерживаемый тип фильтра"
+
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:1303
+#, elixir-autogen, elixir-format
+msgid "Update all"
+msgstr "Обновить все"
+
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:1350
+#, elixir-autogen, elixir-format
+msgid "Update price"
+msgstr "Обновить цену"
 
 #: lib/phoenix_kit_warehouse/web/internal_order_form_live.ex:1222
 #: lib/phoenix_kit_warehouse/web/inventory_form_live.ex:1060

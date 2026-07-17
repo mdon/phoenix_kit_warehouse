@@ -60,6 +60,11 @@ msgstr "Pärast lisamist:"
 msgid "All columns selected"
 msgstr "Kõik veerud on valitud"
 
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:726
+#, elixir-autogen, elixir-format
+msgid "All prices updated"
+msgstr "Kõik hinnad uuendatud"
+
 #: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:283
 #, elixir-autogen, elixir-format
 msgid "All quantities set to ordered"
@@ -156,6 +161,11 @@ msgstr "Kataloog"
 #, elixir-autogen, elixir-format
 msgid "Catalogue base price"
 msgstr "Kataloogi põhihind"
+
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:687
+#, elixir-autogen, elixir-format
+msgid "Catalogue module not available"
+msgstr "Kataloogi moodul pole saadaval"
 
 #: lib/phoenix_kit_warehouse/column_config/stock.ex:54
 #, elixir-autogen, elixir-format
@@ -282,6 +292,11 @@ msgstr "Loodud"
 #, elixir-autogen, elixir-format
 msgid "Creator"
 msgstr "Looja"
+
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:1313
+#, elixir-autogen, elixir-format
+msgid "Current cost"
+msgstr "Praegune ostuhind"
 
 #: lib/phoenix_kit_warehouse/web/components/warehouse_browser.ex:117
 #: lib/phoenix_kit_warehouse/web/components/warehouse_browser.ex:520
@@ -547,6 +562,11 @@ msgstr "Uuendamine ebaõnnestus"
 #, elixir-autogen, elixir-format
 msgid "Failed to update quantities"
 msgstr "Koguste uuendamine ebaõnnestus"
+
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:690
+#, elixir-autogen, elixir-format
+msgid "Failed to update price"
+msgstr "Hinna uuendamine ebaõnnestus"
 
 #: lib/phoenix_kit_warehouse/web/goods_issue_form_live.ex:677
 #: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:707
@@ -1113,6 +1133,16 @@ msgstr "Sisestamise aeg"
 msgid "Prior stock"
 msgstr "Eelnev laoseis"
 
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:683
+#, elixir-autogen, elixir-format
+msgid "Price updated"
+msgstr "Hind uuendatud"
+
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:1295
+#, elixir-autogen, elixir-format
+msgid "Purchase price proposals"
+msgstr "Ostuhinna ettepanekud"
+
 #: lib/phoenix_kit_warehouse/web/inventory_form_live.ex:812
 #, elixir-autogen, elixir-format
 msgid "Re-conduct"
@@ -1122,6 +1152,11 @@ msgstr "Sisesta uuesti"
 #, elixir-autogen, elixir-format
 msgid "Receipt Lines"
 msgstr "Vastuvõtu read"
+
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:1314
+#, elixir-autogen, elixir-format
+msgid "Receipt price"
+msgstr "Vastuvõtu hind"
 
 #: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:896
 #, elixir-autogen, elixir-format
@@ -1429,6 +1464,16 @@ msgstr "Ühiku väärtus"
 #, elixir-autogen, elixir-format
 msgid "Unsupported filter type"
 msgstr "Toetamata filtritüüp"
+
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:1303
+#, elixir-autogen, elixir-format
+msgid "Update all"
+msgstr "Uuenda kõik"
+
+#: lib/phoenix_kit_warehouse/web/goods_receipt_form_live.ex:1350
+#, elixir-autogen, elixir-format
+msgid "Update price"
+msgstr "Uuenda hind"
 
 #: lib/phoenix_kit_warehouse/web/internal_order_form_live.ex:1222
 #: lib/phoenix_kit_warehouse/web/inventory_form_live.ex:1060
