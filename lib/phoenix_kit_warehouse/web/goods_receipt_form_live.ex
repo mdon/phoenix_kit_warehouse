@@ -686,8 +686,23 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
             {:noreply,
              put_flash(socket, :error, dgettext("default", "Catalogue module not available"))}
 
+          {:error, :not_current} ->
+            # The catalogue already revised this pair (concurrent editor) —
+            # re-derive so the stale proposal disappears instead of wedging
+            # every subsequent click.
+            {:noreply,
+             socket
+             |> assign_price_proposals()
+             |> put_flash(
+               :info,
+               dgettext("default", "This price was already revised in the catalogue")
+             )}
+
           {:error, _reason} ->
-            {:noreply, put_flash(socket, :error, dgettext("default", "Failed to update price"))}
+            {:noreply,
+             socket
+             |> assign_price_proposals()
+             |> put_flash(:error, dgettext("default", "Failed to update price"))}
         end
     end
   end
@@ -709,29 +724,39 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
       source_uuid: receipt.uuid
     ]
 
-    result =
-      Enum.reduce_while(proposals, :ok, fn proposal, :ok ->
+    # Iterate ALL proposals — one failure must not abort the rest or hide
+    # partial success. The card is re-derived afterwards regardless, so
+    # applied rows disappear and only genuinely failing pairs remain.
+    {ok_count, failed} =
+      Enum.reduce(proposals, {0, []}, fn proposal, {ok, failed} ->
         case CostProposals.apply_revision(proposal, opts) do
-          {:ok, _info} -> {:cont, :ok}
-          {:error, :catalogue_unavailable} -> {:halt, {:error, :catalogue_unavailable}}
-          {:error, reason} -> {:halt, {:error, reason}}
+          {:ok, _info} -> {ok + 1, failed}
+          {:error, reason} -> {ok, [{proposal, reason} | failed]}
         end
       end)
 
-    case result do
-      :ok ->
-        {:noreply,
-         socket
-         |> assign_price_proposals()
-         |> put_flash(:info, dgettext("default", "All prices updated"))}
+    socket = assign_price_proposals(socket)
 
-      {:error, :catalogue_unavailable} ->
-        {:noreply,
-         put_flash(socket, :error, dgettext("default", "Catalogue module not available"))}
+    socket =
+      cond do
+        failed == [] ->
+          put_flash(socket, :info, dgettext("default", "All prices updated"))
 
-      {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, dgettext("default", "Failed to update price"))}
-    end
+        ok_count > 0 ->
+          put_flash(
+            socket,
+            :error,
+            dgettext("default", "Updated %{ok} price(s); %{failed} failed",
+              ok: ok_count,
+              failed: length(failed)
+            )
+          )
+
+        true ->
+          put_flash(socket, :error, dgettext("default", "Failed to update price"))
+      end
+
+    {:noreply, socket}
   end
 
   # `Map.get(meta, uuid, "order")` alone isn't enough insurance: the key can
@@ -1327,17 +1352,23 @@ defmodule PhoenixKitWarehouse.Web.GoodsReceiptFormLive do
                     </div>
                   </td>
                   <td class="text-sm text-base-content/70">
-                    {proposal.info.supplier_source || "—"}
+                    {proposal.info.supplier_name_snapshot || "—"}
                   </td>
                   <td class="text-right tabular-nums text-sm">
                     <%= if proposal.current_cost do %>
                       {Decimal.to_string(proposal.current_cost, :normal)}
+                      <span :if={proposal.info.currency} class="text-xs text-base-content/50">
+                        {proposal.info.currency}
+                      </span>
                     <% else %>
                       <span class="text-base-content/40">—</span>
                     <% end %>
                   </td>
                   <td class="text-right tabular-nums text-sm font-medium">
                     {Decimal.to_string(proposal.receipt_price, :normal)}
+                    <span :if={proposal.info.currency} class="text-xs text-base-content/50">
+                      {proposal.info.currency}
+                    </span>
                   </td>
                   <%= if @admin? do %>
                     <td>

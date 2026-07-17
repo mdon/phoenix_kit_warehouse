@@ -109,6 +109,12 @@ defmodule PhoenixKitWarehouse.CostProposals do
   @doc """
   Applies `Catalogue.Suppliers.revise_unit_cost/3` for a proposal, guarded.
 
+  **Currency caveat (documented deferral):** goods receipts carry no currency
+  field, so receipt prices are assumed to be in the junction row's own
+  `currency` (single-currency deployments). The proposals card displays the
+  row currency next to both prices so the keeper sees what they are applying;
+  a currency-aware comparison requires a receipt-level currency first.
+
   Returns `{:error, :catalogue_unavailable}` when the catalogue exports are
   absent (same degradation path as `catalogue_resolver/0`).
   """
@@ -118,7 +124,11 @@ defmodule PhoenixKitWarehouse.CostProposals do
     if Code.ensure_loaded?(PhoenixKitCatalogue.Catalogue.Suppliers) and
          function_exported?(PhoenixKitCatalogue.Catalogue.Suppliers, :revise_unit_cost, 3) do
       # credo:disable-for-next-line Credo.Check.Refactor.Apply
-      apply(PhoenixKitCatalogue.Catalogue.Suppliers, :revise_unit_cost, [info, price, opts])
+      apply(PhoenixKitCatalogue.Catalogue.Suppliers, :revise_unit_cost, [
+        info,
+        at_storage_scale(price),
+        opts
+      ])
     else
       {:error, :catalogue_unavailable}
     end
@@ -126,22 +136,32 @@ defmodule PhoenixKitWarehouse.CostProposals do
 
   # ── Private helpers ─────────────────────────────────────────────────────────
 
-  # A receipt price diverges from the catalogue cost when they are unequal.
-  # When the catalogue cost is nil (price not yet catalogued), any non-zero
-  # receipt price is treated as a divergence.
+  # unit_cost is stored as NUMERIC(14,4) (core V149) — both the divergence
+  # comparison and the applied price are rounded to that scale, otherwise a
+  # >4-dp receipt price (e.g. line total ÷ quantity) is rounded on store and
+  # the proposal reappears forever after apply.
+  @cost_scale 4
+
+  @doc false
+  def at_storage_scale(%Decimal{} = d), do: Decimal.round(d, @cost_scale)
+
+  # A receipt price diverges from the catalogue cost when they are unequal
+  # at the storage scale. When the catalogue cost is nil (price not yet
+  # catalogued), any non-zero receipt price is treated as a divergence.
   defp diverges?(receipt_price, nil) do
-    Decimal.compare(receipt_price, Decimal.new("0")) != :eq
+    Decimal.compare(at_storage_scale(receipt_price), Decimal.new("0")) != :eq
   end
 
   defp diverges?(receipt_price, current_cost) do
-    Decimal.compare(receipt_price, current_cost) != :eq
+    Decimal.compare(at_storage_scale(receipt_price), at_storage_scale(current_cost)) != :eq
   end
 
   defp parse_decimal(nil), do: nil
   defp parse_decimal(%Decimal{} = d), do: d
 
   defp parse_decimal(v) when is_binary(v) do
-    case Decimal.parse(v) do
+    # Tolerate comma decimal separators (ru/et locale input in line maps).
+    case v |> String.trim() |> String.replace(",", ".") |> Decimal.parse() do
       {d, ""} -> d
       _ -> nil
     end
